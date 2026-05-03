@@ -1,0 +1,496 @@
+/* ── Variables ── */
+:root {
+    --bg-root: #0d0d14;
+    --bg-card: #13131f;
+    --bg-card2: #1a1a2e;
+    --border: rgba(255, 255, 255, 0.07);
+    --gold: #D4AF37;
+    --gold-dim: rgba(212, 175, 55, 0.15);
+    --green: #2ecc71;
+    --red: #e74c3c;
+    --red-dark: #7b1c12;
+    --blue: #4a90d9;
+    --text-main: #e8e8f0;
+    --text-dim: #888;
+    --text-muted: #555;
+    --radius: 10px;
+    --radius-sm: 6px;
+}
+
+/* ── Reset / Base ── */
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+body {
+    background: var(--bg-root);
+    color: var(--text-main);
+    font-family: 'IBM Plex Mono', 'Courier New', monospace;
+    font-size: 13px;
+    min-height: 100vh;
+}
+
+a {
+    text-decoration: none;
+}
+
+/* ── Root ── */
+.dashboard-root {
+    min-height: 100vh;
+    background: var(--bg-root);
+}
+
+.page-container {
+    max-width: 1280px;
+    margin: 0 auto;
+    padding: 0 20px 40px;
+}
+
+/* ── Header ── */
+.header {
+    display: flex;
+    align-items: center;
+    gap: 24px;
+    padding: 18px 20px;
+    background: var(--bg-card);
+    border-bottom: 1px solid var(--border);
+    margin: 0 -20px 20px;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+}
+
+.brand {
+    flex: 0 0 auto;
+}
+
+.brand-title {
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--gold);
+    letter-spacing: 0.5px;
+}
+
+.brand-sub {
+    font-size: 10px;
+    color: var(--text-dim);
+    letter-spacing: 1px;
+    text-transform: uppercase;
+}
+
+.nav-tabs {
+    display: flex;
+    gap: 6px;
+    flex: 1;
+}
+
+.nav-tab {
+    padding: 8px 18px;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border);
+    color: var(--text-dim);
+    font-family: inherit;
+    font-size: 12px;
+    font-weight: 500;
+    transition: all 0.18s ease;
+    cursor: pointer;
+    background: transparent;
+}
+
+.nav-tab:hover {
+    color: var(--text-main);
+    border-color: rgba(255, 255, 255, 0.2);
+}
+
+.nav-tab-active {
+    background: var(--bg-card2);
+    color: var(--text-main);
+    border-color: var(--gold);
+    color: var(--gold);
+}
+
+.timestamp {
+    margin-left: auto;
+    font-size: 10px;
+    color: var(--text-muted);
+    white-space: nowrap;
+}
+
+/* ── Selector cripto ── */
+.cripto-selector {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 18px;
+}
+
+.btn-cripto {
+    padding: 7px 20px;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border);
+    background: var(--bg-card);
+    color: var(--text-dim);
+    font-family: inherit;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    letter-spacing: 0.5px;
+    transition: all 0.15s ease;
+}
+
+.btn-cripto:hover {
+    border-color: var(--gold);
+    color: var(--text-main);
+}
+
+.btn-cripto-active {
+    background: var(--gold-dim);
+    border-color: var(--gold);
+    color: var(--gold);
+}
+
+/* ── KPI Cards ── */
+.kpi-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 12px;
+    margin-bottom: 18px;
+}
+
+.kpi-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 16px 18px;
+}
+
+.kpi-label {
+    font-size: 10px;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    margin-bottom: 6px;
+}
+
+.kpi-value {
+    font-size: 26px;
+    font-weight: 700;
+    line-height: 1.1;
+    margin-bottom: 4px;
+}
+
+.kpi-precio {
+    color: var(--text-main);
+}
+
+.kpi-green {
+    color: var(--green);
+}
+
+.kpi-red {
+    color: var(--red);
+}
+
+.kpi-sub {
+    font-size: 10px;
+    color: var(--text-muted);
+}
+
+.kpi-sub.kpi-green {
+    color: var(--green);
+}
+
+.kpi-sub.kpi-red {
+    color: var(--red);
+}
+
+/* ── Main row ── */
+.main-row {
+    display: grid;
+    grid-template-columns: 1fr 320px;
+    gap: 14px;
+    margin-bottom: 14px;
+}
+
+/* ── Chart container ── */
+.chart-container {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 16px;
+    min-height: 360px;
+}
+
+.chart-full {
+    grid-column: 1 / -1;
+}
+
+.chart-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 12px;
+}
+
+.chart-title {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-main);
+    letter-spacing: 0.3px;
+}
+
+.chart-graph {
+    width: 100%;
+}
+
+/* Dropdown de rango */
+.rango-dropdown .Select-control {
+    background: var(--bg-card2) !important;
+    border: 1px solid var(--border) !important;
+    border-radius: var(--radius-sm) !important;
+    color: var(--text-main) !important;
+    min-width: 90px;
+}
+
+.rango-dropdown .Select-menu-outer {
+    background: var(--bg-card2) !important;
+    border: 1px solid var(--border) !important;
+}
+
+.rango-dropdown .VirtualizedSelectOption {
+    color: var(--text-main) !important;
+}
+
+.rango-dropdown .VirtualizedSelectFocusedOption {
+    background: var(--border) !important;
+}
+
+/* ── Predictions panel ── */
+.predictions-panel {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+
+.panel-title {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-main);
+    padding-bottom: 10px;
+    border-bottom: 1px solid var(--border);
+}
+
+/* Tabla predicciones */
+.pred-tabla {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.pred-fila {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 0;
+    border-bottom: 1px solid var(--border);
+}
+
+.pred-fila:last-child {
+    border-bottom: none;
+}
+
+.pred-hora {
+    color: var(--text-dim);
+    font-size: 11px;
+    width: 40px;
+}
+
+.pred-precio {
+    font-weight: 600;
+    font-size: 13px;
+    flex: 1;
+    text-align: center;
+}
+
+.pred-badge {
+    font-size: 10px;
+    font-weight: 700;
+    padding: 3px 8px;
+    border-radius: 4px;
+    min-width: 56px;
+    text-align: right;
+}
+
+.pred-badge-neg {
+    color: var(--red);
+    background: rgba(231, 76, 60, 0.15);
+}
+
+.pred-badge-pos {
+    color: var(--green);
+    background: rgba(46, 204, 113, 0.15);
+}
+
+/* Decisión RL */
+.decision-panel {
+    border-radius: var(--radius-sm);
+    padding: 14px 16px;
+    text-align: center;
+    border: 1px solid var(--border);
+}
+
+.decision-buy {
+    background: rgba(39, 174, 96, 0.2);
+    border-color: rgba(39, 174, 96, 0.4);
+}
+
+.decision-sell {
+    background: rgba(123, 28, 18, 0.5);
+    border-color: rgba(231, 76, 60, 0.4);
+}
+
+.decision-hold {
+    background: rgba(127, 140, 141, 0.2);
+    border-color: rgba(127, 140, 141, 0.3);
+}
+
+.decision-label {
+    font-size: 10px;
+    color: var(--text-dim);
+    margin-bottom: 6px;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+}
+
+.decision-body {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+}
+
+.decision-accion {
+    font-size: 20px;
+    font-weight: 800;
+    letter-spacing: 1px;
+}
+
+.decision-confianza {
+    font-size: 10px;
+    color: var(--text-dim);
+    margin-top: 4px;
+}
+
+/* Botón actualizar */
+.btn-actualizar {
+    width: 100%;
+    padding: 11px;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border);
+    background: var(--bg-card2);
+    color: var(--text-main);
+    font-family: inherit;
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    margin-top: auto;
+}
+
+.btn-actualizar:hover {
+    border-color: var(--gold);
+    color: var(--gold);
+    background: var(--gold-dim);
+}
+
+/* ── Walk-forward tabla ── */
+.wf-tabla {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    margin-top: 12px;
+}
+
+.wf-row {
+    display: grid;
+    grid-template-columns: 60px 1fr 80px 80px 70px 70px 90px;
+    padding: 10px 8px;
+    border-bottom: 1px solid var(--border);
+    align-items: center;
+    font-size: 12px;
+    transition: background 0.12s;
+}
+
+.wf-row:hover:not(.wf-header) {
+    background: var(--bg-card2);
+}
+
+.wf-header {
+    font-size: 10px;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.wf-th,
+.wf-td {
+    display: block;
+}
+
+.wf-right {
+    text-align: right;
+}
+
+.wf-bold {
+    font-weight: 700;
+    color: var(--gold);
+}
+
+.wf-small {
+    font-size: 10px;
+    color: var(--text-dim);
+}
+
+.wf-green {
+    color: var(--green);
+    font-weight: 600;
+}
+
+.wf-red {
+    color: var(--red);
+    font-weight: 600;
+}
+
+/* ── Loading ── */
+.loading-text {
+    color: var(--text-muted);
+    font-size: 11px;
+    text-align: center;
+    padding: 20px;
+}
+
+/* ── Scrollbar ── */
+::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+}
+
+::-webkit-scrollbar-track {
+    background: var(--bg-root);
+}
+
+::-webkit-scrollbar-thumb {
+    background: var(--border);
+    border-radius: 3px;
+}
+
+/* ── Plotly override ── */
+.js-plotly-plot .plotly .modebar {
+    display: none !important;
+}
