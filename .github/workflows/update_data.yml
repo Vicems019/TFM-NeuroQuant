@@ -1,0 +1,27 @@
+name: Actualizar datos cryptomonedas cada hora
+
+on:
+  schedule:
+    - cron: '0 * * * *'
+  workflow_dispatch:
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+        
+      - name: Instalar dependencias
+        run: pip install requests pandas kaggle
+
+      - name: Ejecutar actualizador
+        env:
+          KAGGLE_USERNAME: ${{ secrets.vicentelorenzomarn }}
+          KAGGLE_KEY:      ${{ secrets.KGAT_c1cbb561967222d1785b1cd91ba6b244 }}
+
+        run: python updater.py
