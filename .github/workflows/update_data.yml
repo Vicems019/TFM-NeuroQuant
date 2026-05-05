@@ -22,9 +22,12 @@ jobs:
         run: pip install requests pandas kaggle
 
       - name: Configurar credenciales Kaggle
+        env:
+          KAGGLE_USERNAME: ${{ secrets.KAGGLE_USERNAME }}
+          KAGGLE_KEY:      ${{ secrets.KAGGLE_KEY }}
         run: |
           mkdir -p ~/.kaggle
-          echo '{"username":"${{ secrets.KAGGLE_USERNAME }}","key":"${{ secrets.KAGGLE_KEY }}"}' > ~/.kaggle/kaggle.json
+          echo "{\"username\":\"$KAGGLE_USERNAME\",\"key\":\"$KAGGLE_KEY\"}" > ~/.kaggle/kaggle.json
           chmod 600 ~/.kaggle/kaggle.json
 
       - name: Ejecutar actualizador
@@ -44,8 +47,11 @@ jobs:
       - name: Subir a Kaggle
         env:
           KAGGLE_USERNAME: ${{ secrets.KAGGLE_USERNAME }}
-          KAGGLE_KEY: ${{ secrets.KAGGLE_KEY }}
+          KAGGLE_KEY:      ${{ secrets.KAGGLE_KEY }}
         run: |
+          mkdir -p ~/.kaggle
+          echo "{\"username\":\"$KAGGLE_USERNAME\",\"key\":\"$KAGGLE_KEY\"}" > ~/.kaggle/kaggle.json
+          chmod 600 ~/.kaggle/kaggle.json
           kaggle datasets version \
             -p data/raw \
             -m "Auto-update $(date -u '+%Y-%m-%d %H:%M') UTC"
