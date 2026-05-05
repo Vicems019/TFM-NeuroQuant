@@ -113,39 +113,6 @@ def update_local():
             update_csv(path, symbol, interval, coin)   # sin start_date
     print("✅ data/raw/ actualizado\n")
 
-# ── Push a Kaggle ─────────────────────────────────────────────────────────────
-def push_to_kaggle():
-    try:
-        from kaggle.api.kaggle_api_extended import KaggleApiExtended
-    except ImportError:
-        print("⚠ kaggle no instalado: pip install kaggle")
-        return
-
-    # El kaggle.json debe estar en ~/.kaggle/kaggle.json con tu API key
-    api = KaggleApiExtended()
-    api.authenticate()
-
-    # dataset-metadata.json necesario solo si no existe ya en RAW_DIR
-    metadata_path = os.path.join(RAW_DIR, "dataset-metadata.json")
-    if not os.path.exists(metadata_path):
-        metadata = {
-            "title": "dataraw",
-            "id": KAGGLE_ID,
-            "licenses": [{"name": "CC0-1.0"}]
-        }
-        with open(metadata_path, "w") as f:
-            json.dump(metadata, f)
-
-    print("── Subiendo a Kaggle ───────────────────────────────────────")
-    api.dataset_create_version(
-        RAW_DIR,
-        version_notes=f"Auto-update {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M')} UTC",
-        quiet=False,
-        delete_old_versions=False,
-    )
-    print(f"✅ Dataset actualizado: {KAGGLE_ID}\n")
-
 # ── Main ──────────────────────────────────────────────────────────────────────
 if __name__ == "__main__":
     update_local()
-    push_to_kaggle()
