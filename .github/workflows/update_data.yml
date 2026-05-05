@@ -28,7 +28,7 @@ jobs:
           chmod 600 ~/.kaggle/kaggle.json
 
       - name: Ejecutar actualizador
-        run: python update_data.py
+        run: python ~/data/update_data.py
 
       - name: Commit y push de los CSVs actualizados
         run: |
