@@ -28,7 +28,7 @@ jobs:
           chmod 600 ~/.kaggle/kaggle.json
 
       - name: Ejecutar actualizador
-        run: python update_data.py
+        run: python ./data/update_data.py
 
       - name: Commit y push de los CSVs actualizados
         run: |
@@ -37,3 +37,12 @@ jobs:
           git add data/raw/*.csv
           git diff --cached --quiet || git commit -m "auto: update raw data $(date -u '+%Y-%m-%d %H:%M') UTC"
           git push
+
+      - name: Subir a Kaggle
+        env:
+          KAGGLE_USERNAME: ${{ secrets.KAGGLE_USERNAME }}
+          KAGGLE_KEY: ${{ secrets.KAGGLE_KEY }}
+        run: |
+          kaggle datasets version \
+            -p data/raw \
+            -m "Auto-update $(date -u '+%Y-%m-%d %H:%M') UTC"
