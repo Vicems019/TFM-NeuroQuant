@@ -117,7 +117,7 @@ layout = html.Div([
         # Left – P&L summary + bar chart
         html.Div([
             # Absolute P&L panel
-            html.Div(id="pnl-summary-panel", className="pnl-summary-panel"),
+            html.Div(id="pnl-summary-panel", className="pnl-summary-panel", style={"display": "grid", "gridTemplateColumns": "repeat(3, 1fr)", "gap": "15px", "marginBottom": "25px"}),
             # Bar chart
             html.Div([
                 html.Div([
@@ -134,7 +134,7 @@ layout = html.Div([
                     ),
                 ], className="section-header"),
                 dcc.Graph(id="grafico-rentabilidad",
-                          config={"displayModeBar": False}, style={"height": "240px"}),
+                          config={"displayModeBar": True, "scrollZoom": True, "modeBarButtonsToAdd": ['zoomIn2d', 'zoomOut2d']}, style={"height": "240px"}),
             ], className="bar-chart-inner"),
         ], className="panel-bar-chart"),
         # Right – Operations table

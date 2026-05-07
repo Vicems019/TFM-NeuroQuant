@@ -40,9 +40,6 @@ sidebar = html.Div([
     html.Div([
         html.Div("📊  ANÁLISIS", className="sidebar-section-label"),
         dcc.Link(html.Div(["◈ ", html.Span("Visión General")],  className="sidebar-item"), href="/"),
-        dcc.Link(html.Div(["◈ ", html.Span("Predicciones IA")], className="sidebar-item"), href="/predictions"),
-        dcc.Link(html.Div(["◈ ", html.Span("Backtesting")],     className="sidebar-item"), href="/backtesting"),
-        dcc.Link(html.Div(["◈ ", html.Span("Walk-Forward")],    className="sidebar-item"), href="/walk-forward"),
     ], className="sidebar-section"),
     # Section 2
     html.Div([
