@@ -7,6 +7,7 @@ import numpy as np
 from datetime import timedelta
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from pages.mock_data import get_predicciones_lstm, get_decision_rl, BASE_PRICES
+from pages.lstm_utils import get_metrica
 
 dash.register_page(__name__, path="/predictions", name="Predicciones IA")
 
@@ -57,12 +58,12 @@ modal_metrics = html.Div([
             html.Div([
                 html.H4("Modelo Predictivo (LSTM)", style={"color": "white", "marginBottom": "15px"}),
                 html.Div([
-                    html.Div([html.Span("RMSE", style={"fontWeight": "bold"}), html.Div("152.3", className="pnl-val"), html.Span("Error cuadrático medio", className="modal-hint")], className="pnl-stat-card"),
-                    html.Div([html.Span("MAE", style={"fontWeight": "bold"}), html.Div("98.5", className="pnl-val"), html.Span("Error absoluto medio", className="modal-hint")], className="pnl-stat-card"),
-                    html.Div([html.Span("MAPE", style={"fontWeight": "bold"}), html.Div("1.2%", className="pnl-val"), html.Span("Error porcentual medio", className="modal-hint")], className="pnl-stat-card"),
-                    html.Div([html.Span("Dir. Acc.", style={"fontWeight": "bold"}), html.Div("58.4%", className="pnl-val green"), html.Span("Precisión direccional", className="modal-hint")], className="pnl-stat-card"),
-                    html.Div([html.Span("R²", style={"fontWeight": "bold"}), html.Div("0.85", className="pnl-val"), html.Span("Coef. de determinación", className="modal-hint")], className="pnl-stat-card"),
-                    html.Div([html.Span("Walk-Forward", style={"fontWeight": "bold"}), html.Div("62 ± 1.8%", className="pnl-val green"), html.Span("Validación en ventanas", className="modal-hint")], className="pnl-stat-card"),
+                    html.Div([html.Span("RMSE", style={"fontWeight": "bold"}), html.Div(id="rmse-value", className="pnl-val"), html.Span("Error cuadrático medio", className="modal-hint")], className="pnl-stat-card"),
+                    html.Div([html.Span("MAE", style={"fontWeight": "bold"}), html.Div(id="mae-value", className="pnl-val"), html.Span("Error absoluto medio", className="modal-hint")], className="pnl-stat-card"),
+                    html.Div([html.Span("MAPE", style={"fontWeight": "bold"}), html.Div(id="mape-value", className="pnl-val"), html.Span("Error porcentual medio", className="modal-hint")], className="pnl-stat-card"),
+                    html.Div([html.Span("Dir. Acc.", style={"fontWeight": "bold"}), html.Div(id="dir-acc-value", className="pnl-val green"), html.Span("Precisión direccional", className="modal-hint")], className="pnl-stat-card"),
+                    html.Div([html.Span("R²", style={"fontWeight": "bold"}), html.Div(id="r2-value", className="pnl-val"), html.Span("Coef. de determinación", className="modal-hint")], className="pnl-stat-card"),
+                    html.Div([html.Span("Walk-Forward", style={"fontWeight": "bold"}), html.Div(id="wf-value", className="pnl-val green"), html.Span("Validación en ventanas", className="modal-hint")], className="pnl-stat-card"),
                 ], style={"display": "grid", "gridTemplateColumns": "repeat(3, 1fr)", "gap": "10px"})
             ]),
             
@@ -252,6 +253,12 @@ def toggle_modal_metrics(btn, close_x, backdrop):
     Output("grafico-prediccion-cono", "figure"),
     Output("lista-predicciones-4h", "children"),
     Output("caja-decision-rl", "children"),
+    Output("rmse-value", "children"),
+    Output("mae-value", "children"),
+    Output("mape-value", "children"),
+    Output("dir-acc-value", "children"),
+    Output("r2-value", "children"),
+    Output("wf-value", "children"),
     Input("store-cripto", "data"),
 )
 def update_predictions_page(cripto):
@@ -404,4 +411,13 @@ def update_predictions_page(cripto):
         hoverlabel=dict(bgcolor="#0a1020", bordercolor="#3b82f6", font=dict(color="white"))
     )
     
-    return title_str, f"${current_price:,.2f}", change_str, change_style, fig, pred_ui, rl_ui
+    # Get LSTM metrics
+    metrics = get_metrica(cripto)
+    rmse_val = f"{metrics.get('rmse_lstm', 0):.3f}"
+    mae_val = f"{metrics.get('mae_lstm', 0):.3f}"
+    mape_val = f"{(metrics.get('mae_lstm', 0) * 100):.1f}%"  # Approximate MAPE
+    dir_acc_val = f"{(metrics.get('accuracy_lstm', 0) * 100):.1f}%"
+    r2_val = f"{metrics.get('r2_lstm', 0):.2f}"
+    wf_val = f"{(metrics.get('accuracy_lstm', 0) * 100):.1f} ± 2.5%"  # Approximate
+    
+    return title_str, f"${current_price:,.2f}", change_str, change_style, fig, pred_ui, rl_ui, rmse_val, mae_val, mape_val, dir_acc_val, r2_val, wf_val

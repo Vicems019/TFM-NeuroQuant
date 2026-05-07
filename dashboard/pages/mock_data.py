@@ -5,6 +5,36 @@ import random
 
 BASE_PRICES = {"BTC": 78448, "ETH": 3120, "SOL": 148, "XRP": 0.512, "AVAX": 28.4}
 METRICS = {
+    "BTC":  {
+        "retorno_rl": 42.1, "retorno_bh": 16.2, "sharpe": 1.87, "max_dd": -8.3,
+        "mae_lstm": 0.023, "rmse_lstm": 0.031, "r2_lstm": 0.87, "accuracy_lstm": 0.72
+    },
+    "ETH":  {
+        "retorno_rl": 38.5, "retorno_bh": 12.8, "sharpe": 1.64, "max_dd": -11.2,
+        "mae_lstm": 0.028, "rmse_lstm": 0.037, "r2_lstm": 0.82, "accuracy_lstm": 0.68
+    },
+    "SOL":  {
+        "retorno_rl": 61.3, "retorno_bh": 34.1, "sharpe": 2.12, "max_dd": -14.7,
+        "mae_lstm": 0.035, "rmse_lstm": 0.045, "r2_lstm": 0.79, "accuracy_lstm": 0.65
+    },
+    "XRP":  {
+        "retorno_rl": 29.7, "retorno_bh": 8.4,  "sharpe": 1.43, "max_dd": -9.1,
+        "mae_lstm": 0.041, "rmse_lstm": 0.052, "r2_lstm": 0.74, "accuracy_lstm": 0.61
+    },
+    "AVAX": {
+        "retorno_rl": 47.8, "retorno_bh": 21.3, "sharpe": 1.91, "max_dd": -12.4,
+        "mae_lstm": 0.032, "rmse_lstm": 0.042, "r2_lstm": 0.81, "accuracy_lstm": 0.67
+    },
+}
+INVERSIONES = {"BTC": 10000, "ETH": 5000, "SOL": 3000, "AVAX": 2000, "ALL": 20000}
+CRYPTO_COLORS = {"BTC": "#3b82f6", "ETH": "#10b981", "SOL": "#f59e0b", "AVAX": "#8b5cf6"}
+
+try:
+    from .lstm_utils import get_predicciones_lstm_real
+    USE_REAL_LSTM = True
+except ImportError:
+    USE_REAL_LSTM = False
+METRICS = {
     "BTC":  {"retorno_rl": 42.1, "retorno_bh": 16.2, "sharpe": 1.87, "max_dd": -8.3},
     "ETH":  {"retorno_rl": 38.5, "retorno_bh": 12.8, "sharpe": 1.64, "max_dd": -11.2},
     "SOL":  {"retorno_rl": 61.3, "retorno_bh": 34.1, "sharpe": 2.12, "max_dd": -14.7},
@@ -33,14 +63,18 @@ def get_historico(cripto: str, dias: int = 7) -> pd.DataFrame:
     return df
 
 def get_predicciones_lstm(cripto: str) -> dict:
-    base = BASE_PRICES.get(cripto, 100)
-    variacion_base = random.uniform(-0.015, 0.015)
-    precio_actual = base * (1 + variacion_base)
-    tendencia = random.uniform(-0.003, 0.002)
-    pred = {f"{h}h": precio_actual * (1 + tendencia * h + random.uniform(-0.001, 0.001)) for h in range(1, 5)}
-    pred["precio_actual"] = precio_actual
-    pred["cambio_24h"]    = random.uniform(-2.5, 3.5)
-    return pred
+    if USE_REAL_LSTM:
+        return get_predicciones_lstm_real(cripto)
+    else:
+        # Fallback to synthetic
+        base = BASE_PRICES.get(cripto, 100)
+        variacion_base = random.uniform(-0.015, 0.015)
+        precio_actual = base * (1 + variacion_base)
+        tendencia = random.uniform(-0.003, 0.002)
+        pred = {f"{h}h": precio_actual * (1 + tendencia * h + random.uniform(-0.001, 0.001)) for h in range(1, 5)}
+        pred["precio_actual"] = precio_actual
+        pred["cambio_24h"] = random.uniform(-2.5, 3.5)
+        return pred
 
 def get_decision_rl(cripto: str, predicciones: dict) -> dict:
     precio_actual   = predicciones.get("precio_actual", BASE_PRICES.get(cripto, 100))
