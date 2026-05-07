@@ -9,18 +9,14 @@ from pages.mock_data import (
     get_rentabilidad_absoluta, get_historial_operaciones,
     BASE_PRICES, CRYPTO_COLORS
 )
-
 dash.register_page(__name__, path="/", name="Visión General")
-
 CRIPTOS    = ["ALL", "BTC", "ETH", "SOL", "AVAX"]
 CARD_COINS = ["BTC", "ETH", "SOL"]
 PERIODO_LABEL = {"1d": "Diaria", "7d": "Semanal", "1m": "Mensual"}
-
 def _fmt(precio):
     if precio >= 1000: return f"${precio:,.0f}"
     if precio >= 1:    return f"${precio:,.3f}"
     return f"${precio:.4f}"
-
 def _mini_chart(coin):
     df    = get_historico(coin, 3)
     close = df["close"].tolist()
@@ -35,7 +31,6 @@ def _mini_chart(coin):
         xaxis=dict(visible=False), yaxis=dict(visible=False),
     )
     return fig
-
 def chart_card(coin):
     preds  = get_predicciones_lstm(coin)
     precio = preds.get("precio_actual", 0)
@@ -54,7 +49,6 @@ def chart_card(coin):
         dcc.Graph(id=f"mini-chart-{coin}", figure=_mini_chart(coin),
                   config={"displayModeBar": False, "staticPlot": True}, className="mini-chart"),
     ], className="chart-card"), href=f"/predictions?coin={coin}", style={"textDecoration": "none", "color": "inherit"})
-
 # ── CUSTOM MODAL ─────────────────────────────────────
 modal = html.Div([
     html.Div(id="modal-backdrop", className="modal-backdrop-custom", n_clicks=0),
@@ -106,11 +100,9 @@ modal = html.Div([
         ], className="modal-footer-row"),
     ], className="modal-panel"),
 ], id="modal-wrapper", style={"display": "none"})
-
 # ── LAYOUT ────────────────────────────────────────────────────────────────────
 layout = html.Div([
     modal,
-
     # Selector ALL | BTC | ETH | SOL | AVAX
     html.Div([
         *[html.Button(c, id={"type": "btn-cripto", "index": c},
@@ -118,17 +110,14 @@ layout = html.Div([
           for c in CRIPTOS],
         html.Div(id="timestamp-header", className="page-timestamp"),
     ], className="cripto-selector"),
-
     # 3 Chart Cards
     html.Div([chart_card(c) for c in CARD_COINS], className="chart-cards-row"),
-
     # Bottom: Bar Chart + Table
     html.Div([
         # Left – P&L summary + bar chart
         html.Div([
             # Absolute P&L panel
             html.Div(id="pnl-summary-panel", className="pnl-summary-panel"),
-
             # Bar chart
             html.Div([
                 html.Div([
@@ -148,7 +137,6 @@ layout = html.Div([
                           config={"displayModeBar": False}, style={"height": "240px"}),
             ], className="bar-chart-inner"),
         ], className="panel-bar-chart"),
-
         # Right – Operations table
         html.Div([
             html.Div([
@@ -158,17 +146,14 @@ layout = html.Div([
             ], className="section-header"),
             html.Div(id="tabla-operaciones", className="ops-table-wrapper"),
         ], className="panel-ops-table"),
-
     ], className="bottom-row"),
-
 ], className="page-container")
-
 # ── CALLBACKS ─────────────────────────────────────────────────────────────────
-
 @callback(
     Output({"type": "btn-cripto", "index": dash.ALL}, "className"),
     Input("store-cripto", "data"),
     State({"type": "btn-cripto", "index": dash.ALL}, "id"),
+
 )
 def actualizar_botones_cripto(selected_c, ids):
     if not ids:
@@ -176,7 +161,6 @@ def actualizar_botones_cripto(selected_c, ids):
     if not selected_c:
         selected_c = "ALL"
     return ["btn-cripto" + (" btn-cripto-active" if id["index"] == selected_c else "") for id in ids]
-
 @callback(
     Output("store-predicciones", "data"),
     Output("store-decision",     "data"),
@@ -187,7 +171,6 @@ def actualizar_predicciones(_, cripto):
     c     = "BTC" if cripto == "ALL" else cripto
     preds = get_predicciones_lstm(c)
     return preds, get_decision_rl(c, preds)
-
 @callback(
     Output("timestamp-header",      "children"),
     Output("rentabilidad-subtitle", "children"),
@@ -200,7 +183,6 @@ def actualizar_meta(cripto, periodo):
     label = PERIODO_LABEL.get(periodo, "")
     sub   = f"· {cripto}  ·  {label}"
     return f"Actualizado: {ts}", sub
-
 @callback(
     Output("grafico-rentabilidad", "figure"),
     Input("store-cripto", "data"),
@@ -208,7 +190,6 @@ def actualizar_meta(cripto, periodo):
 )
 def actualizar_bar_chart(cripto, periodo):
     fig = go.Figure()
-
     if cripto == "ALL":
         info = get_rentabilidad_all(periodo)
         labels = info["labels"]
@@ -230,7 +211,6 @@ def actualizar_bar_chart(cripto, periodo):
             textposition="outside", textfont=dict(size=9, color="#94a3b8"),
             hovertemplate="<b>%{x}</b><br>%{y:.2f}%<extra></extra>",
         ))
-
     fig.add_hline(y=0, line_color="rgba(255,255,255,0.12)", line_width=1)
     fig.update_layout(
         paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
@@ -244,7 +224,6 @@ def actualizar_bar_chart(cripto, periodo):
         bargap=0.3,
     )
     return fig
-
 @callback(
     Output("pnl-summary-panel", "children"),
     Input("store-cripto", "data"),
@@ -258,12 +237,10 @@ def actualizar_pnl_panel(cripto, periodo):
     t_abs  = info["total_abs"]
     inv    = info["inversion"]
     label  = PERIODO_LABEL.get(periodo, "")
-
     p_cls  = "pnl-val green" if p_pct >= 0 else "pnl-val red"
     t_cls  = "pnl-val green" if t_pct >= 0 else "pnl-val red"
     p_sign = "+" if p_pct >= 0 else ""
     t_sign = "+" if t_pct >= 0 else ""
-
     return [
         html.Div([
             html.Div(f"P&L {label}", className="pnl-label"),
@@ -281,7 +258,6 @@ def actualizar_pnl_panel(cripto, periodo):
             html.Div(f"{cripto}", className="pnl-sub"),
         ], className="pnl-stat-card"),
     ]
-
 @callback(
     Output("tabla-operaciones", "children"),
     Input("store-cripto",       "data"),
@@ -309,7 +285,6 @@ def render_tabla_ops(cripto, _):
             html.Span(f"{sign}{op['pnl']:.2f}%", className=f"ops-td ops-right {pnl_cls}"),
         ], className="ops-row"))
     return rows
-
 # Modal open/close
 @callback(
     Output("modal-wrapper", "style"),
@@ -325,7 +300,6 @@ def toggle_modal(*_):
     if triggered == "btn-add-op":
         return {"display": "flex", "position": "fixed", "top": "0", "left": "0", "width": "100%", "height": "100%", "zIndex": "1000", "alignItems": "center", "justifyContent": "center"}
     return {"display": "none"}
-
 # Auto-fill price from current mock price when crypto changes
 @callback(
     Output("modal-precio",     "value"),

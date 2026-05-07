@@ -1,6 +1,5 @@
 import dash
 from dash import Dash, html, dcc, Input, Output, State, callback
-
 app = Dash(
     __name__,
     use_pages=True,
@@ -9,7 +8,6 @@ app = Dash(
     meta_tags=[{"name": "viewport", "content": "width=device-width, initial-scale=1"}]
 )
 server = app.server
-
 # ── TOPBAR ──────────────────────────────────────────────────────────────────
 topbar = html.Div([
     html.Div([
@@ -23,7 +21,6 @@ topbar = html.Div([
             html.Span(" AI", className="logo-ai"),
         ], className="logo-text"),
     ], className="topbar-left"),
-
     html.Div([
         dcc.Link(
             html.Button("⚙", id="btn-settings", className="icon-btn", title="Ajustes"),
@@ -35,10 +32,8 @@ topbar = html.Div([
         ),
     ], className="topbar-right"),
 ], className="topbar")
-
 # ── SIDEBAR BACKDROP ────────────────────────────────────────────────────────
 backdrop = html.Div(id="sidebar-backdrop", className="sidebar-backdrop", n_clicks=0)
-
 # ── SIDEBAR ─────────────────────────────────────────────────────────────────
 sidebar = html.Div([
     # Section 1
@@ -49,7 +44,6 @@ sidebar = html.Div([
         dcc.Link(html.Div(["◈ ", html.Span("Backtesting")],     className="sidebar-item"), href="/backtesting"),
         dcc.Link(html.Div(["◈ ", html.Span("Walk-Forward")],    className="sidebar-item"), href="/walk-forward"),
     ], className="sidebar-section"),
-
     # Section 2
     html.Div([
         html.Div("💹  MERCADOS", className="sidebar-section-label"),
@@ -57,20 +51,17 @@ sidebar = html.Div([
         dcc.Link(html.Div(["Ξ ", html.Span("Ethereum (ETH)")],  className="sidebar-item"), href="/predictions?coin=ETH"),
         dcc.Link(html.Div(["◎ ", html.Span("Solana   (SOL)")],  className="sidebar-item"), href="/predictions?coin=SOL"),
     ], className="sidebar-section"),
-
     # Section 3
     html.Div([
         html.Div("⚙  CUENTA", className="sidebar-section-label"),
         dcc.Link(html.Div(["👤 ", html.Span("Mi Perfil")], className="sidebar-item"), href="/profile"),
         dcc.Link(html.Div(["⚙ ", html.Span("Ajustes")],   className="sidebar-item"), href="/settings"),
     ], className="sidebar-section"),
-
     html.Button(
         ["← ", html.Span("Regresar")],
         id="btn-sidebar-close", className="sidebar-close-btn", n_clicks=0
     ),
 ], id="sidebar", className="sidebar")
-
 # ── APP LAYOUT ───────────────────────────────────────────────────────────────
 app.layout = html.Div([
     dcc.Location(id="global-url", refresh=False),
@@ -83,8 +74,6 @@ app.layout = html.Div([
     sidebar,
     html.Div(dash.page_container, className="page-wrapper"),
 ], className="dashboard-root")
-
-
 # ── SIDEBAR TOGGLE CALLBACK ──────────────────────────────────────────────────
 @callback(
     Output("sidebar",          "className"),
@@ -100,7 +89,6 @@ def toggle_sidebar(open_n, close_n, back_n, current):
     if triggered == "btn-sidebar-toggle":
         return "sidebar open", "sidebar-backdrop show"
     return "sidebar", "sidebar-backdrop"
-
 @callback(
     Output("store-cripto", "data"),
     Input("global-url", "search"),
@@ -127,7 +115,5 @@ def sync_cripto(search, btn_clicks, current):
             return parsed['coin'][0]
             
     return dash.no_update
-
-
 if __name__ == "__main__":
     app.run(debug=True)
