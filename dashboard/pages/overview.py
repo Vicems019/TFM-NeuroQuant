@@ -9,6 +9,7 @@ from pages.mock_data import (
     get_rentabilidad_absoluta, get_historial_operaciones,
     BASE_PRICES, CRYPTO_COLORS
 )
+os.environ["TF_ENABLE_ONEDNN_OPTS"] = "0"
 dash.register_page(__name__, path="/", name="Visión General")
 CRIPTOS    = ["ALL", "BTC", "ETH", "SOL", "AVAX"]
 CARD_COINS = ["BTC", "ETH", "SOL"]

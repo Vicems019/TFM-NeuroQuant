@@ -21,7 +21,7 @@ FEATURE_COLS = [
     "rsi_14","macd","macd_signal","bb_position",
     "bb_width","atr_14","volume_ratio","hour_sin",
     "hour_cos","dow_sin","dow_cos","fear_greed",
-    "return_4h","rsi_4h","return_1d","rsi_1d", "volatility_7"
+    "return_4h","rsi_4h","return_1d","rsi_1d", "macd_4h"
 ]
 # Configuraciones por moneda (del cuaderno crypto-lstm.ipynb)
 COIN_CONFIGS = {
@@ -90,7 +90,6 @@ def _load_model(cripto: str) -> nn.Module:
     if cripto in _MODEL_CACHE:
         return _MODEL_CACHE[cripto]
 
-    # Buscar el .pt — acepta cualquier fold (best_BTC_fold5.pt, etc.)
     candidates = list(MODELS_DIR.glob(f"*{cripto}*.pt"))
     if not candidates:
         raise FileNotFoundError(
@@ -188,3 +187,115 @@ def get_metrica(cripto: str, df_test=None) -> dict:
         "r2_lstm"      : r2,
         "accuracy_lstm": accuracy,
     }
+
+
+def get_predicciones_lstm_real(cripto: str) -> dict:
+    """
+    Obtiene precio actual, cambio 24h y proyecciones a 4h usando datos reales.
+    """
+    cripto = cripto.upper()
+    cfg    = COIN_CONFIGS.get(cripto, COIN_CONFIGS["BTC"])
+    
+    try:
+        data_path = Path(__file__).parent.parent.parent / "data" / "preprocessed" / f"{cripto}_hourly.csv"
+        if not data_path.exists():
+            return {}
+            
+        df_full = pd.read_csv(data_path, parse_dates=["timestamp"])
+        if len(df_full) < cfg["seq_len"] + 1:
+            return {}
+            
+        # 1. Datos para predicción (última ventana)
+        df_window = df_full.tail(cfg["seq_len"]).copy()
+        feat = df_window[FEATURE_COLS].values.astype(np.float32)
+        
+        # Normalización local para el input (debe ser coherente con el entrenamiento)
+        # Aquí usamos una simplificación, en producción se usarían escaladores guardados.
+        mu   = feat.mean(axis=0)
+        std  = feat.std(axis=0) + 1e-8
+        feat_norm = np.clip((feat - mu) / std, -5., 5.)
+        
+        X_input = torch.from_numpy(feat_norm).unsqueeze(0).to(DEVICE)
+        
+        # 2. Inferencia
+        model = _load_model(cripto)
+        with torch.no_grad():
+            preds_ret = model(X_input).cpu().numpy()[0] # [r1, r2, r3, r4]
+            
+        # 3. Calcular precios proyectados
+        precio_actual = df_full.iloc[-1]["close"]
+        proyecciones = {f"{h}h": float(precio_actual * (1 + preds_ret[h-1])) for h in range(1, 5)}
+        
+        # 4. Calcular cambio 24h real
+        # Buscamos la vela de hace exactamente 24h si existe
+        cambio_24h = 0.0
+        if len(df_full) >= 25:
+            precio_24h = df_full.iloc[-25]["close"]
+            cambio_24h = ((precio_actual - precio_24h) / precio_24h) * 100
+            
+        res = {
+            "precio_actual": float(precio_actual),
+            "cambio_24h": float(cambio_24h),
+            **proyecciones
+        }
+        return res
+        
+    except Exception as e:
+        print(f"Error en get_predicciones_lstm_real({cripto}): {e}")
+        return {}
+
+
+def get_lstm_shap(cripto: str) -> dict:
+    """
+    Calcula la importancia de los atributos usando SHAP (GradientExplainer).
+    """
+    try:
+        import shap
+    except ImportError:
+        print("SHAP no instalado. Ejecuta 'pip install shap'")
+        return {"features": ["SMA_20", "RSI_14", "Volumen", "MACD", "Boll_Up"], "values": [0.35, 0.22, 0.18, 0.15, 0.10]}
+
+    cripto = cripto.upper()
+    cfg    = COIN_CONFIGS.get(cripto, COIN_CONFIGS["BTC"])
+    
+    try:
+        model = _load_model(cripto)
+        data_path = Path(__file__).parent.parent.parent / "data" / "preprocessed" / f"{cripto}_hourly.csv"
+        df = pd.read_csv(data_path).tail(cfg["seq_len"] + 50)
+        
+        # Preparar datos
+        feat = df[FEATURE_COLS].values.astype(np.float32)
+        mu, std = feat.mean(axis=0), feat.std(axis=0) + 1e-8
+        feat_norm = np.clip((feat - mu) / std, -5., 5.)
+        
+        X = []
+        for i in range(len(feat_norm) - cfg["seq_len"] + 1):
+            X.append(feat_norm[i : i + cfg["seq_len"]])
+        X = torch.from_numpy(np.array(X)).to(DEVICE) # (N, seq_len, n_features)
+        
+        # Usamos GradientExplainer por ser más eficiente con redes profundas
+        # Background: una muestra de 20 secuencias
+        background = X[:20]
+        test_sample = X[-1:] # Explicamos la última predicción
+        
+        explainer = shap.GradientExplainer(model, background)
+        # Explanamos respecto a la salida 0 (t+1h)
+        shap_values = explainer.shap_values(test_sample) # List of arrays (for each horizon)
+        
+        # Agregamos la importancia absoluta por característica a través del tiempo
+        # shap_values[0] tiene forma (1, seq_len, n_features)
+        importance = np.abs(shap_values[0]).mean(axis=(0, 1))
+        
+        # Normalizar para que sumen 1 (opcional)
+        importance = importance / (importance.sum() + 1e-8)
+        
+        # Ordenar y coger top 5
+        indices = np.argsort(importance)[::-1][:5]
+        top_features = [FEATURE_COLS[i] for i in indices]
+        top_values = [float(importance[i]) for i in indices]
+        
+        return {"features": top_features, "values": top_values}
+        
+    except Exception as e:
+        print(f"Error en SHAP LSTM ({cripto}): {e}")
+        return {"features": ["Error"], "values": [0]}

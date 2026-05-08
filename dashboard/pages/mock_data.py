@@ -45,6 +45,20 @@ INVERSIONES = {"BTC": 10000, "ETH": 5000, "SOL": 3000, "AVAX": 2000, "ALL": 2000
 CRYPTO_COLORS = {"BTC": "#3b82f6", "ETH": "#10b981", "SOL": "#f59e0b", "AVAX": "#8b5cf6"}
 
 def get_historico(cripto: str, dias: int = 7) -> pd.DataFrame:
+    try:
+        from pathlib import Path
+        data_path = Path(__file__).parent.parent.parent / "data" / "preprocessed" / f"{cripto.upper()}_hourly.csv"
+        if data_path.exists():
+            df = pd.read_csv(data_path, parse_dates=["timestamp"])
+            # Renombrar 'timestamp' a 'fecha' para mantener compatibilidad con el resto del dashboard
+            df = df.rename(columns={"timestamp": "fecha"})
+            # Filtrar por los últimos N días
+            n_rows = dias * 24
+            return df.tail(n_rows).reset_index(drop=True)
+    except Exception as e:
+        print(f"Error cargando historico real para {cripto}: {e}")
+
+    # Fallback to synthetic
     base = BASE_PRICES.get(cripto, 100)
     n = dias * 24
     np.random.seed(hash(cripto) % 2**31)
@@ -63,18 +77,20 @@ def get_historico(cripto: str, dias: int = 7) -> pd.DataFrame:
     return df
 
 def get_predicciones_lstm(cripto: str) -> dict:
-    if USE_REAL_LSTM:
-        return get_predicciones_lstm_real(cripto)
-    else:
-        # Fallback to synthetic
-        base = BASE_PRICES.get(cripto, 100)
-        variacion_base = random.uniform(-0.015, 0.015)
-        precio_actual = base * (1 + variacion_base)
-        tendencia = random.uniform(-0.003, 0.002)
-        pred = {f"{h}h": precio_actual * (1 + tendencia * h + random.uniform(-0.001, 0.001)) for h in range(1, 5)}
-        pred["precio_actual"] = precio_actual
-        pred["cambio_24h"] = random.uniform(-2.5, 3.5)
-        return pred
+    # Intentar obtener predicción real primero
+    res_real = get_predicciones_lstm_real(cripto)
+    if res_real and "precio_actual" in res_real:
+        return res_real
+    
+    # Fallback to synthetic
+    base = BASE_PRICES.get(cripto, 100)
+    variacion_base = random.uniform(-0.015, 0.015)
+    precio_actual = base * (1 + variacion_base)
+    tendencia = random.uniform(-0.003, 0.002)
+    pred = {f"{h}h": precio_actual * (1 + tendencia * h + random.uniform(-0.001, 0.001)) for h in range(1, 5)}
+    pred["precio_actual"] = precio_actual
+    pred["cambio_24h"] = random.uniform(-2.5, 3.5)
+    return pred
 
 def get_decision_rl(cripto: str, predicciones: dict) -> dict:
     precio_actual   = predicciones.get("precio_actual", BASE_PRICES.get(cripto, 100))

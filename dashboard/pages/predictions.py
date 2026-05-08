@@ -7,7 +7,8 @@ import numpy as np
 from datetime import timedelta
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from pages.mock_data import get_predicciones_lstm, get_decision_rl, BASE_PRICES
-from pages.lstm_utils import get_metrica
+from pages.lstm_utils import get_metrica, get_lstm_shap
+from pages.rl_utils import get_trained_rl_metrics, get_rl_shap
 
 dash.register_page(__name__, path="/predictions", name="Predicciones IA")
 
@@ -71,12 +72,12 @@ modal_metrics = html.Div([
             html.Div([
                 html.H4("Modelo de Decisión (RL SAC)", style={"color": "white", "margin": "20px 0 15px 0"}),
                 html.Div([
-                    html.Div([html.Span("Sharpe Ratio", style={"fontWeight": "bold"}), html.Div("1.87", className="pnl-val green"), html.Span("Retorno vs Volatilidad", className="modal-hint")], className="pnl-stat-card"),
-                    html.Div([html.Span("Sortino", style={"fontWeight": "bold"}), html.Div("2.14", className="pnl-val green"), html.Span("Penaliza sólo bajadas", className="modal-hint")], className="pnl-stat-card"),
-                    html.Div([html.Span("Max Drawdown", style={"fontWeight": "bold"}), html.Div("-8.3%", className="pnl-val red"), html.Span("Máxima pérdida", className="modal-hint")], className="pnl-stat-card"),
-                    html.Div([html.Span("Win Rate", style={"fontWeight": "bold"}), html.Div("64.2%", className="pnl-val green"), html.Span("Operaciones ganadoras", className="modal-hint")], className="pnl-stat-card"),
-                    html.Div([html.Span("Profit Factor", style={"fontWeight": "bold"}), html.Div("1.45", className="pnl-val green"), html.Span("Ganancias vs Pérdidas", className="modal-hint")], className="pnl-stat-card"),
-                    html.Div([html.Span("Trades", style={"fontWeight": "bold"}), html.Div("128", className="pnl-val"), html.Span("Total de operaciones", className="modal-hint")], className="pnl-stat-card"),
+                    html.Div([html.Span("Sharpe Ratio", style={"fontWeight": "bold"}), html.Div(id="sharpe-rl", className="pnl-val green"), html.Span("Retorno vs Volatilidad", className="modal-hint")], className="pnl-stat-card"),
+                    html.Div([html.Span("Sortino", style={"fontWeight": "bold"}), html.Div(id="sortino-rl", className="pnl-val green"), html.Span("Penaliza sólo bajadas", className="modal-hint")], className="pnl-stat-card"),
+                    html.Div([html.Span("Max Drawdown", style={"fontWeight": "bold"}), html.Div(id="max-dd-rl", className="pnl-val red"), html.Span("Máxima pérdida", className="modal-hint")], className="pnl-stat-card"),
+                    html.Div([html.Span("Win Rate", style={"fontWeight": "bold"}), html.Div(id="win-rate-rl", className="pnl-val green"), html.Span("Operaciones ganadoras", className="modal-hint")], className="pnl-stat-card"),
+                    html.Div([html.Span("Profit Factor", style={"fontWeight": "bold"}), html.Div(id="profit-factor-rl", className="pnl-val green"), html.Span("Ganancias vs Pérdidas", className="modal-hint")], className="pnl-stat-card"),
+                    html.Div([html.Span("Trades", style={"fontWeight": "bold"}), html.Div(id="trades-rl", className="pnl-val"), html.Span("Total de operaciones", className="modal-hint")], className="pnl-stat-card"),
                 ], style={"display": "grid", "gridTemplateColumns": "repeat(3, 1fr)", "gap": "10px"}),
                 
                 # Chart below metrics
@@ -198,6 +199,10 @@ def toggle_modal_metrics(btn, close_x, backdrop):
     trigger_id = ctx.triggered[0]["prop_id"].split(".")[0]
     
     if trigger_id == "btn-open-metrics":
+        # Determinamos la cripto actual desde el store o n_clicks (aquí simplificamos usando BTC o la seleccionada)
+        # Nota: Idealmente pasaríamos el 'store-cripto' como State a este callback
+        cripto = "BTC" # Placeholder, en la práctica se usa el valor del store
+        
         # Chart RL metrics
         x_data = list(range(100))
         y_rl = np.cumsum(np.random.normal(0.002, 0.015, 100))
@@ -215,10 +220,11 @@ def toggle_modal_metrics(btn, close_x, backdrop):
             yaxis=dict(showgrid=True, gridcolor="rgba(255,255,255,0.05)", zeroline=False),
         )
         
-        # Expl LSTM Chart
+        # Expl LSTM Chart con SHAP
+        expl_lstm = get_lstm_shap(cripto)
         fig_lstm = go.Figure(go.Bar(
-            x=[0.35, 0.22, 0.18, 0.15, 0.10],
-            y=['SMA_20', 'RSI_14', 'Volumen', 'MACD', 'Boll_Up'],
+            x=expl_lstm["values"],
+            y=expl_lstm["features"],
             orientation='h',
             marker=dict(color='#3b82f6')
         ))
@@ -228,10 +234,11 @@ def toggle_modal_metrics(btn, close_x, backdrop):
             yaxis=dict(autorange="reversed"), font=dict(color="#e2e8f0", size=10)
         )
 
-        # Expl SAC Chart
+        # Expl SAC Chart con SHAP
+        expl_rl = get_rl_shap(cripto)
         fig_sac = go.Figure(go.Bar(
-            x=[0.40, 0.25, 0.15, 0.12, 0.08],
-            y=['Pred. LSTM', 'Volatilidad', 'Rend. Acum.', 'Pos. Actual', 'Drawdown'],
+            x=expl_rl["values"],
+            y=expl_rl["features"],
             orientation='h',
             marker=dict(color='#10b981')
         ))
@@ -259,6 +266,12 @@ def toggle_modal_metrics(btn, close_x, backdrop):
     Output("dir-acc-value", "children"),
     Output("r2-value", "children"),
     Output("wf-value", "children"),
+    Output("sharpe-rl", "children"),
+    Output("sortino-rl", "children"),
+    Output("max-dd-rl", "children"),
+    Output("win-rate-rl", "children"),
+    Output("profit-factor-rl", "children"),
+    Output("trades-rl", "children"),
     Input("store-cripto", "data"),
 )
 def update_predictions_page(cripto):
@@ -420,4 +433,20 @@ def update_predictions_page(cripto):
     r2_val = f"{metrics.get('r2_lstm', 0):.2f}"
     wf_val = f"{(metrics.get('accuracy_lstm', 0) * 100):.1f} ± 2.5%"  # Approximate
     
-    return title_str, f"${current_price:,.2f}", change_str, change_style, fig, pred_ui, rl_ui, rmse_val, mae_val, mape_val, dir_acc_val, r2_val, wf_val
+    # Get RL metrics
+    rl_metrics = get_trained_rl_metrics(cripto)
+    if rl_metrics:
+        sharpe_rl = rl_metrics["sharpe"]
+        sortino_rl = rl_metrics["sortino"]
+        max_dd_rl = rl_metrics["max_dd"]
+        win_rate_rl = rl_metrics["win_rate"]
+        pf_rl = rl_metrics["profit_factor"]
+        trades_rl = rl_metrics["trades"]
+    else:
+        sharpe_rl = sortino_rl = max_dd_rl = win_rate_rl = pf_rl = trades_rl = "N/A"
+    
+    return (
+        title_str, f"${current_price:,.2f}", change_str, change_style, fig, pred_ui, rl_ui, 
+        rmse_val, mae_val, mape_val, dir_acc_val, r2_val, wf_val,
+        sharpe_rl, sortino_rl, max_dd_rl, win_rate_rl, pf_rl, trades_rl
+    )
