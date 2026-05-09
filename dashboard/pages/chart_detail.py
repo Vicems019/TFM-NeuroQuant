@@ -3,7 +3,8 @@ from dash import html, dcc, callback, Input, Output
 import plotly.graph_objects as go
 import sys, os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from pages.mock_data import get_historico, get_predicciones_lstm
+from pages.mock_data import get_historico
+from pages.lstm_utils import get_predicciones_lstm_real, format_price
 dash.register_page(__name__, path="/chart-detail", name="Gráfico detallado")
 CRIPTOS = ["BTC", "ETH", "SOL", "AVAX"]
 RANGOS  = {"1d": 1, "3d": 3, "7d": 7, "14d": 14, "1m": 30}
@@ -51,7 +52,7 @@ def render_detail(dd_cripto, rango, store_cripto):
     cripto = dd_cripto or store_cripto or "BTC"
     dias   = RANGOS.get(rango, 7)
     df     = get_historico(cripto, dias)
-    preds  = get_predicciones_lstm(cripto)
+    preds  = get_predicciones_lstm_real(cripto)
     from datetime import datetime, timedelta
     ahora  = datetime.utcnow()
     fechas_pred  = [ahora + timedelta(hours=h) for h in [1, 2, 3, 4]]

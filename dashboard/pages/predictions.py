@@ -6,8 +6,8 @@ import pandas as pd
 import numpy as np
 from datetime import timedelta
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from pages.mock_data import get_predicciones_lstm, get_decision_rl, BASE_PRICES
-from pages.lstm_utils import get_metrica, get_lstm_shap
+from pages.mock_data import get_decision_rl, BASE_PRICES
+from pages.lstm_utils import get_metrica, get_lstm_shap, get_predicciones_lstm_real, format_price, CURRENCY_RATES
 from pages.rl_utils import get_trained_rl_metrics, get_rl_shap
 
 dash.register_page(__name__, path="/predictions", name="Predicciones IA")
@@ -18,6 +18,10 @@ def load_historical_data(coin="BTC"):
         df = pd.read_csv(path)
         if 'timestamp' in df.columns:
             df['timestamp'] = pd.to_datetime(df['timestamp'])
+            # Convertir a horario de Madrid para visualización
+            if df['timestamp'].dt.tz is None:
+                df['timestamp'] = df['timestamp'].dt.tz_localize("UTC")
+            df['timestamp'] = df['timestamp'].dt.tz_convert("Europe/Madrid")
             df = df.sort_values("timestamp")
             return df.tail(24 * 30) # last 30 days
     return pd.DataFrame()
@@ -273,8 +277,10 @@ def toggle_modal_metrics(btn, close_x, backdrop):
     Output("profit-factor-rl", "children"),
     Output("trades-rl", "children"),
     Input("store-cripto", "data"),
+    Input("store-currency", "data"),
 )
-def update_predictions_page(cripto):
+def update_predictions_page(cripto, currency):
+    if not currency: currency = "USD"
     if not cripto or cripto == "ALL":
         cripto = "BTC"
         
@@ -291,17 +297,22 @@ def update_predictions_page(cripto):
     else:
         current_price = BASE_PRICES.get(cripto, 100)
         prev_day_price = current_price * 0.98
-        last_time = pd.Timestamp.utcnow()
+        last_time = pd.Timestamp.utcnow().tz_convert("Europe/Madrid")
         
     change_pct = ((current_price - prev_day_price) / prev_day_price) * 100
     change_str = f"▲ {change_pct:.2f}% (vs ayer)" if change_pct >= 0 else f"▼ {abs(change_pct):.2f}% (vs ayer)"
     change_color = "#10b981" if change_pct >= 0 else "#ef4444"
     change_style = {"textAlign": "right", "marginTop": "15px", "fontWeight": "bold", "color": change_color, "fontSize": "1.1rem"}
     
-    # 2. Get Predictions
-    preds = get_predicciones_lstm(cripto)
+    # 2. Get Real Predictions
+    try:
+        preds = get_predicciones_lstm_real(cripto)
+    except Exception as e:
+        print(f"Error en inferencia real para {cripto}: {e}")
+        from pages.mock_data import get_predicciones_lstm
+        preds = get_predicciones_lstm(cripto)
     
-    mock_current = preds["precio_actual"]
+    mock_current = preds.get("precio_actual", current_price)
     scale = current_price / mock_current if mock_current > 0 else 1
     
     pred_vals = []
@@ -325,7 +336,7 @@ def update_predictions_page(cripto):
             
         pred_ui.append(html.Div([
             html.Span(f"+{i+1}h", style={"color": "#94a3b8", "fontSize": "1.1rem"}),
-            html.Span(f"${val:,.2f}", style={"color": "white", "fontSize": "1.2rem", "fontWeight": "bold"}),
+            html.Span(format_price(val, currency), style={"color": "white", "fontSize": "1.2rem", "fontWeight": "bold"}),
             html.Span(f"{indicator}", style={"color": color, "fontSize": "1.2rem"})
         ], style={
             "display": "flex", "justifyContent": "space-between", "alignItems": "center", 
@@ -368,7 +379,8 @@ def update_predictions_page(cripto):
             line=dict(color='#3b82f6', width=2)
         ))
         
-        future_times = [last_time + pd.Timedelta(hours=i) for i in range(1, 5)]
+        # Ajuste de 1h antes del bloque español (cierre API 17:00 Madrid)
+        future_times = [last_time + pd.Timedelta(hours=i-1) for i in range(1, 5)]
         
         alpha = 0.005 
         upper_bound = [v * (1 + alpha * (i+1)) for i, v in enumerate(pred_vals)]
@@ -400,15 +412,18 @@ def update_predictions_page(cripto):
         max_pred = max(upper_bound)
         min_pred = min(lower_bound)
         
+        rate = CURRENCY_RATES.get(currency, CURRENCY_RATES["USD"])["rate"]
+        sym = CURRENCY_RATES.get(currency, CURRENCY_RATES["USD"])["symbol"]
+        
         fig.add_annotation(
             x=future_times[-1], y=max_pred,
-            text=f"Máx: ${max_pred:,.0f}",
+            text=f"Máx: {sym}{max_pred*rate:,.0f}",
             showarrow=True, arrowhead=2, arrowsize=1, arrowwidth=2, arrowcolor="#10b981",
             font=dict(color="#10b981", size=11), yshift=10
         )
         fig.add_annotation(
             x=future_times[-1], y=min_pred,
-            text=f"Mín: ${min_pred:,.0f}",
+            text=f"Mín: {sym}{min_pred*rate:,.0f}",
             showarrow=True, arrowhead=2, arrowsize=1, arrowwidth=2, arrowcolor="#ef4444",
             font=dict(color="#ef4444", size=11), yshift=-10
         )
@@ -419,7 +434,7 @@ def update_predictions_page(cripto):
         font=dict(color="#94a3b8"),
         legend=dict(orientation="h", y=1.05, bgcolor="rgba(0,0,0,0)"),
         xaxis=dict(showgrid=False, zeroline=False),
-        yaxis=dict(showgrid=True, gridcolor="rgba(255,255,255,0.05)", zeroline=False, tickprefix="$"),
+        yaxis=dict(showgrid=True, gridcolor="rgba(255,255,255,0.05)", zeroline=False, tickprefix=CURRENCY_RATES.get(currency, CURRENCY_RATES["USD"])["symbol"]),
         hovermode="x unified",
         hoverlabel=dict(bgcolor="#0a1020", bordercolor="#3b82f6", font=dict(color="white"))
     )
@@ -446,7 +461,7 @@ def update_predictions_page(cripto):
         sharpe_rl = sortino_rl = max_dd_rl = win_rate_rl = pf_rl = trades_rl = "N/A"
     
     return (
-        title_str, f"${current_price:,.2f}", change_str, change_style, fig, pred_ui, rl_ui, 
+        title_str, format_price(current_price, currency), change_str, change_style, fig, pred_ui, rl_ui, 
         rmse_val, mae_val, mape_val, dir_acc_val, r2_val, wf_val,
         sharpe_rl, sortino_rl, max_dd_rl, win_rate_rl, pf_rl, trades_rl
     )

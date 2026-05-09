@@ -4,52 +4,53 @@ import plotly.graph_objects as go
 import sys, os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from pages.mock_data import (
-    get_predicciones_lstm, get_decision_rl, get_historico, get_metricas,
+    get_decision_rl, get_historico, get_metricas,
     get_rentabilidad_periodica, get_rentabilidad_all,
     get_rentabilidad_absoluta, get_historial_operaciones,
     BASE_PRICES, CRYPTO_COLORS
 )
+from pages.lstm_utils import format_price, CURRENCY_RATES, get_predicciones_lstm_real
 os.environ["TF_ENABLE_ONEDNN_OPTS"] = "0"
 dash.register_page(__name__, path="/", name="Visión General")
 CRIPTOS    = ["ALL", "BTC", "ETH", "SOL", "AVAX"]
 CARD_COINS = ["BTC", "ETH", "SOL"]
 PERIODO_LABEL = {"1d": "Diaria", "7d": "Semanal", "1m": "Mensual"}
-def _fmt(precio):
-    if precio >= 1000: return f"${precio:,.0f}"
-    if precio >= 1:    return f"${precio:,.3f}"
-    return f"${precio:.4f}"
+# Se usa format_price importado de lstm_utils
 def _mini_chart(coin):
-    df    = get_historico(coin, 3)
+    # Usamos get_historico pero limitado a las últimas 72 horas para velocidad
+    df    = get_historico(coin, 72)
+    if df.empty: return go.Figure()
     close = df["close"].tolist()
     up    = close[-1] >= close[0]
     color = "#10b981" if up else "#ef4444"
     fill  = "rgba(16,185,129,0.12)" if up else "rgba(239,68,68,0.10)"
-    fig   = go.Figure(go.Scatter(y=close, fill="tozeroy", fillcolor=fill,
-                                  line=dict(color=color, width=1.8), hoverinfo="skip"))
+    fig   = go.Figure(go.Scatter(x=df.index, y=close, fill="tozeroy", fillcolor=fill,
+                                  line=dict(color=color, width=2.0, shape="spline"), hoverinfo="skip"))
     fig.update_layout(
         paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
         margin=dict(l=0, r=0, t=0, b=0), showlegend=False,
         xaxis=dict(visible=False), yaxis=dict(visible=False),
     )
     return fig
-def chart_card(coin):
-    preds  = get_predicciones_lstm(coin)
-    precio = preds.get("precio_actual", 0)
-    cambio = preds.get("cambio_24h", 0)
-    cls    = "badge-green" if cambio >= 0 else "badge-red"
-    sign   = "+" if cambio >= 0 else ""
-    return dcc.Link(html.Div([
+def chart_card_skeleton(coin):
+    """Genera la estructura estática de la card sin datos."""
+    return html.Div([
         html.Div([
             html.Div([
                 html.Span(coin, className="card-coin-name"),
-                html.Span(f"{sign}{cambio:.2f}%", className=f"card-badge {cls}"),
+                html.Span(id=f"card-badge-{coin}", className="card-badge"),
             ], className="card-coin-row"),
             html.Button("⛶", className="btn-expand", title="Ampliar"),
         ], className="chart-card-header"),
-        html.Div(_fmt(precio), className="card-price"),
-        dcc.Graph(id=f"mini-chart-{coin}", figure=_mini_chart(coin),
-                  config={"displayModeBar": False, "staticPlot": True}, className="mini-chart"),
-    ], className="chart-card"), href=f"/predictions?coin={coin}", style={"textDecoration": "none", "color": "inherit"})
+        dcc.Loading(
+            html.Div(id=f"card-price-{coin}", className="card-price"),
+            type="default", color="#3b82f6"
+        ),
+        dcc.Loading(
+            dcc.Graph(id=f"mini-chart-{coin}", config={"displayModeBar": False, "staticPlot": True}, className="mini-chart"),
+            type="default", color="#3b82f6"
+        ),
+    ], className="chart-card")
 # ── CUSTOM MODAL ─────────────────────────────────────
 modal = html.Div([
     html.Div(id="modal-backdrop", className="modal-backdrop-custom", n_clicks=0),
@@ -111,8 +112,11 @@ layout = html.Div([
           for c in CRIPTOS],
         html.Div(id="timestamp-header", className="page-timestamp"),
     ], className="cripto-selector"),
-    # 3 Chart Cards
-    html.Div([chart_card(c) for c in CARD_COINS], className="chart-cards-row"),
+    # 3 Chart Cards Estáticas
+    html.Div([
+        dcc.Link(chart_card_skeleton(c), href=f"/predictions?coin={c}", style={"textDecoration": "none"})
+        for c in CARD_COINS
+    ], className="chart-cards-row"),
     # Bottom: Bar Chart + Table
     html.Div([
         # Left – P&L summary + bar chart
@@ -170,7 +174,7 @@ def actualizar_botones_cripto(selected_c, ids):
 )
 def actualizar_predicciones(_, cripto):
     c     = "BTC" if cripto == "ALL" else cripto
-    preds = get_predicciones_lstm(c)
+    preds = get_predicciones_lstm_real(c)
     return preds, get_decision_rl(c, preds)
 @callback(
     Output("timestamp-header",      "children"),
@@ -229,8 +233,10 @@ def actualizar_bar_chart(cripto, periodo):
     Output("pnl-summary-panel", "children"),
     Input("store-cripto", "data"),
     Input("dd-rango",     "value"),
+    Input("store-currency", "data"),
 )
-def actualizar_pnl_panel(cripto, periodo):
+def actualizar_pnl_panel(cripto, periodo, currency):
+    if not currency: currency = "USD"
     info   = get_rentabilidad_absoluta(cripto, periodo)
     p_pct  = info["pct"]
     p_abs  = info["abs"]
@@ -246,25 +252,27 @@ def actualizar_pnl_panel(cripto, periodo):
         html.Div([
             html.Div(f"P&L {label}", className="pnl-label"),
             html.Div(f"{p_sign}{p_pct:.2f}%", className=p_cls),
-            html.Div(f"{p_sign}${p_abs:,.2f}", className="pnl-sub"),
+            html.Div(f"{p_sign}{format_price(p_abs, currency)}", className="pnl-sub"),
         ], className="pnl-stat-card"),
         html.Div([
             html.Div("Rentabilidad total", className="pnl-label"),
             html.Div(f"{t_sign}{t_pct:.1f}%", className=t_cls),
-            html.Div(f"{t_sign}${t_abs:,.2f}", className="pnl-sub"),
+            html.Div(f"{t_sign}{format_price(t_abs, currency)}", className="pnl-sub"),
         ], className="pnl-stat-card pnl-stat-card--total"),
         html.Div([
             html.Div("Capital invertido", className="pnl-label"),
-            html.Div(f"${inv:,.0f}", className="pnl-val"),
+            html.Div(format_price(inv, currency), className="pnl-val"),
             html.Div(f"{cripto}", className="pnl-sub"),
         ], className="pnl-stat-card"),
     ]
 @callback(
     Output("tabla-operaciones", "children"),
     Input("store-cripto",       "data"),
+    Input("store-currency",     "data"),
     Input("intervalo-auto",     "n_intervals"),
 )
-def render_tabla_ops(cripto, _):
+def render_tabla_ops(cripto, currency, _):
+    if not currency: currency = "USD"
     ops = get_historial_operaciones()
     header = html.Div([
         html.Span("Fecha",  className="ops-th"),
@@ -282,7 +290,7 @@ def render_tabla_ops(cripto, _):
             html.Span(op["fecha"],                className="ops-td ops-date"),
             html.Span(op["tipo"],                 className=f"ops-badge {tipo_cls}"),
             html.Span(op["cripto"],               className="ops-td ops-coin"),
-            html.Span(_fmt(op["precio"]),         className="ops-td ops-right"),
+            html.Span(format_price(op["precio"], currency), className="ops-td ops-right"),
             html.Span(f"{sign}{op['pnl']:.2f}%", className=f"ops-td ops-right {pnl_cls}"),
         ], className="ops-row"))
     return rows
@@ -310,7 +318,31 @@ def toggle_modal(*_):
 def autofill_precio(cripto):
     if not cripto:
         return None, ""
-    preds  = get_predicciones_lstm(cripto)
+    preds  = get_predicciones_lstm_real(cripto)
     precio = round(preds.get("precio_actual", BASE_PRICES.get(cripto, 0)), 2)
-    hint   = f"Precio de mercado actual ({cripto}): {_fmt(precio)}"
+    hint   = f"Precio de mercado actual ({cripto}): {format_price(precio)}"
     return precio, hint
+
+@callback(
+    [Output(f"card-price-{c}", "children") for c in CARD_COINS] +
+    [Output(f"card-badge-{c}", "children") for c in CARD_COINS] +
+    [Output(f"card-badge-{c}", "className") for c in CARD_COINS] +
+    [Output(f"mini-chart-{c}", "figure") for c in CARD_COINS],
+    Input("store-currency", "data"),
+    Input("intervalo-auto",  "n_intervals"),
+)
+def update_all_cards(currency, _):
+    if not currency: currency = "USD"
+    prices, badges, b_classes, figs = [], [], [], []
+    
+    for coin in CARD_COINS:
+        preds = get_predicciones_lstm_real(coin)
+        p = preds.get("precio_actual", 0)
+        c = preds.get("cambio_24h", 0)
+        
+        prices.append(format_price(p, currency))
+        badges.append(f"{'+' if c>=0 else ''}{c:.2f}%")
+        b_classes.append(f"card-badge {'badge-green' if c>=0 else 'badge-red'}")
+        figs.append(_mini_chart(coin))
+        
+    return prices + badges + b_classes + figs

@@ -696,21 +696,56 @@ a {
 }
 
 /* ── MODAL ──────────────────────────────────────────────────────────────── */
+.modal-backdrop-custom {
+    position: absolute;
+    inset: 0;
+    background: rgba(4, 8, 15, 0.85);
+    backdrop-filter: blur(4px);
+    z-index: 999;
+}
+
+.modal-panel {
+    background: var(--bg-card2);
+    border: 1px solid var(--border-hover);
+    border-radius: var(--radius);
+    padding: 32px;
+    position: relative;
+    width: 600px;
+    max-width: 95vw;
+    box-shadow: 0 10px 40px rgba(0,0,0,0.5), 0 0 0 1px var(--border);
+    z-index: 1001;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+.modal-header-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 15px;
+    margin-bottom: 5px;
+}
+
+.modal-close-x {
+    position: absolute;
+    top: 15px;
+    right: 20px;
+    background: transparent;
+    border: none;
+    color: var(--text-secondary);
+    font-size: 22px;
+    cursor: pointer;
+    transition: color var(--transition);
+    z-index: 10;
+}
+
+.modal-close-x:hover {
+    color: var(--red);
+}
+
 .op-modal .modal-content {
-    background: var(--bg-card2) !important;
-    border: 1px solid var(--border-hover) !important;
-    border-radius: var(--radius) !important;
-    color: var(--text-primary) !important;
-}
-
-.op-modal .modal-header {
-    border-bottom: 1px solid var(--border) !important;
-}
-
-.op-modal .modal-footer {
-    border-top: 1px solid var(--border) !important;
-    gap: 8px;
-}
 
 .op-modal .modal-title {
     font-size: 15px;
@@ -1000,4 +1035,24 @@ a {
 
 .dash-graph {
     background: transparent !important;
+}
+/* ── LOADING STATES ─────────────────────────────────────────────────────── */
+[data-dash-is-loading="true"]::before {
+    content: "Cargando...";
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(8, 14, 30, 0.7);
+    backdrop-filter: blur(4px);
+    color: var(--blue);
+    font-weight: 600;
+    font-size: 14px;
+    z-index: 10;
+    border-radius: inherit;
+}
+
+.chart-cards-row[data-dash-is-loading="true"] {
+    min-height: 180px;
 }

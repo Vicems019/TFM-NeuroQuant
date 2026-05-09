@@ -13,15 +13,31 @@ warnings.filterwarnings('ignore')
 
 BASE_PRICES = {"BTC": 78448, "ETH": 3120, "SOL": 148, "XRP": 0.512, "AVAX": 28.4}
 
+# Tasas de cambio (Simplificadas)
+CURRENCY_RATES = {
+    "USD": {"rate": 1.0, "symbol": "$"},
+    "EUR": {"rate": 0.93, "symbol": "€"},
+    "GBP": {"rate": 0.79, "symbol": "£"},
+    "JPY": {"rate": 155.0, "symbol": "¥"},
+}
+
+def format_price(price, currency="USD"):
+    conf = CURRENCY_RATES.get(currency, CURRENCY_RATES["USD"])
+    val = price * conf["rate"]
+    sym = conf["symbol"]
+    if val >= 1000: return f"{sym}{val:,.0f}"
+    if val >= 1:    return f"{sym}{val:,.2f}"
+    return f"{sym}{val:.4f}"
+
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-# Features usadas en el modelo (de crypto-lstm.ipynb)
+# Features usadas en el modelo (21 features originales)
 FEATURE_COLS = [
-    "close","volume","return_1","return_7",
-    "rsi_14","macd","macd_signal","bb_position",
-    "bb_width","atr_14","volume_ratio","hour_sin",
-    "hour_cos","dow_sin","dow_cos","fear_greed",
-    "return_4h","rsi_4h","return_1d","rsi_1d", "macd_4h"
+    "close", "volume", "return_1", "return_7",
+    "rsi_14", "macd", "macd_signal", "bb_position",
+    "bb_width", "atr_14", "volume_ratio", "hour_sin",
+    "hour_cos", "dow_sin", "dow_cos", "fear_greed",
+    "return_4h", "rsi_4h", "return_1d", "rsi_1d", "macd_4h"
 ]
 # Configuraciones por moneda (del cuaderno crypto-lstm.ipynb)
 COIN_CONFIGS = {
@@ -88,6 +104,7 @@ def _load_model(cripto: str) -> nn.Module:
     """Carga el .pt una sola vez y lo cachea en memoria."""
     cripto = cripto.upper()
     if cripto in _MODEL_CACHE:
+        print(f"  [{cripto}] ⚡ Usando modelo en cache")
         return _MODEL_CACHE[cripto]
 
     candidates = list(MODELS_DIR.glob(f"*{cripto}*.pt"))
@@ -100,11 +117,12 @@ def _load_model(cripto: str) -> nn.Module:
 
     cfg   = COIN_CONFIGS[cripto]
     model = CryptoLSTM(N_FEATURES, N_HORIZONS, cfg)
-    model.load_state_dict(torch.load(pt_path, map_location="cpu"))
+    model.load_state_dict(torch.load(pt_path, map_location=DEVICE))
+    model.to(DEVICE)
     model.eval()
 
     _MODEL_CACHE[cripto] = model
-    print(f"  [{cripto}] ✅ modelo cargado desde {pt_path.name}")
+    print(f"  [{cripto}] 📥 Modelo cargado desde disco ({pt_path.name})")
     return model
 
 
@@ -199,23 +217,26 @@ def get_predicciones_lstm_real(cripto: str) -> dict:
     try:
         data_path = Path(__file__).parent.parent.parent / "data" / "preprocessed" / f"{cripto}_hourly.csv"
         if not data_path.exists():
+            print(f"❌ ERROR: No existe {data_path}")
             return {}
             
         df_full = pd.read_csv(data_path, parse_dates=["timestamp"])
         if len(df_full) < cfg["seq_len"] + 1:
+            print(f"❌ ERROR: Datos insuficientes ({len(df_full)})")
             return {}
             
         # 1. Datos para predicción (última ventana)
-        df_window = df_full.tail(cfg["seq_len"]).copy()
+        df_window = df_full.tail(cfg["seq_len"]).copy().fillna(0)
         feat = df_window[FEATURE_COLS].values.astype(np.float32)
         
-        # Normalización local para el input (debe ser coherente con el entrenamiento)
-        # Aquí usamos una simplificación, en producción se usarían escaladores guardados.
-        mu   = feat.mean(axis=0)
-        std  = feat.std(axis=0) + 1e-8
+        # Normalización GLOBAL (usando todo el histórico para estabilizar)
+        mu   = df_full[FEATURE_COLS].mean().values
+        std  = df_full[FEATURE_COLS].std().values + 1e-8
+        
         feat_norm = np.clip((feat - mu) / std, -5., 5.)
         
-        X_input = torch.from_numpy(feat_norm).unsqueeze(0).to(DEVICE)
+        X_input = torch.from_numpy(feat_norm).unsqueeze(0).to(DEVICE).float()
+        print(f"🔮 Prediciendo {cripto}... Input shape: {X_input.shape}")
         
         # 2. Inferencia
         model = _load_model(cripto)

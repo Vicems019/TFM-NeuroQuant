@@ -44,15 +44,26 @@ METRICS = {
 INVERSIONES = {"BTC": 10000, "ETH": 5000, "SOL": 3000, "AVAX": 2000, "ALL": 20000}
 CRYPTO_COLORS = {"BTC": "#3b82f6", "ETH": "#10b981", "SOL": "#f59e0b", "AVAX": "#8b5cf6"}
 
+_HIST_CACHE = {}
+
 def get_historico(cripto: str, dias: int = 7) -> pd.DataFrame:
     try:
         from pathlib import Path
-        data_path = Path(__file__).parent.parent.parent / "data" / "preprocessed" / f"{cripto.upper()}_hourly.csv"
+        cripto = cripto.upper()
+        
+        # Intentar recuperar de la cache primero
+        if cripto in _HIST_CACHE:
+            df = _HIST_CACHE[cripto]
+            n_rows = dias * 24
+            return df.tail(n_rows).reset_index(drop=True)
+            
+        data_path = Path(__file__).parent.parent.parent / "data" / "preprocessed" / f"{cripto}_hourly.csv"
         if data_path.exists():
+            # Leer el archivo y guardarlo en cache
             df = pd.read_csv(data_path, parse_dates=["timestamp"])
-            # Renombrar 'timestamp' a 'fecha' para mantener compatibilidad con el resto del dashboard
             df = df.rename(columns={"timestamp": "fecha"})
-            # Filtrar por los últimos N días
+            _HIST_CACHE[cripto] = df
+            
             n_rows = dias * 24
             return df.tail(n_rows).reset_index(drop=True)
     except Exception as e:

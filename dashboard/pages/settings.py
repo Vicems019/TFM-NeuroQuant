@@ -35,6 +35,27 @@ layout = html.Div([
             ], className="sett-fields-grid"),
         ], className="settings-section panel-card"),
 
+        # Sección Visualización (Moneda)
+        html.Div([
+            html.Div("Visualización", className="settings-section-title"),
+            html.Div([
+                html.Div([
+                    html.Label("Divisa principal", className="sett-label"),
+                    dcc.Dropdown(
+                        id="sett-currency",
+                        options=[
+                            {"label": "🇺🇸 Dólar Estadounidense (USD)", "value": "USD"},
+                            {"label": "🇪🇺 Euro (EUR)", "value": "EUR"},
+                            {"label": "🇬🇧 Libra Esterlina (GBP)", "value": "GBP"},
+                            {"label": "🇯🇵 Yen Japonés (JPY)", "value": "JPY"},
+                        ],
+                        value="USD", clearable=False, className="modal-dropdown",
+                        persistence=True, persistence_type="local"
+                    ),
+                ], className="sett-field"),
+            ], className="sett-fields-grid"),
+        ], className="settings-section panel-card"),
+
         # Sección notificaciones
         html.Div([
             html.Div("Notificaciones", className="settings-section-title"),

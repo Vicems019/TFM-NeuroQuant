@@ -1,5 +1,12 @@
 import dash
+import os
+import sys
 from dash import Dash, html, dcc, Input, Output, State, callback
+
+# Añadir el directorio raíz al path para que las importaciones de 'dashboard' funcionen
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from dashboard.pages.lstm_utils import get_predicciones_lstm_real
 app = Dash(
     __name__,
     use_pages=True,
@@ -65,6 +72,7 @@ app.layout = html.Div([
     dcc.Store(id="store-cripto",       data="BTC"),
     dcc.Store(id="store-predicciones", data={}),
     dcc.Store(id="store-decision",     data={}),
+    dcc.Store(id="store-currency",     data="USD", storage_type="local"),
     dcc.Interval(id="intervalo-auto",  interval=5 * 60 * 1000, n_intervals=0),
     topbar,
     backdrop,
@@ -112,5 +120,19 @@ def sync_cripto(search, btn_clicks, current):
             return parsed['coin'][0]
             
     return dash.no_update
+
+@callback(
+    Output("store-currency", "data"),
+    Input("sett-currency", "value"),
+    prevent_initial_call=True
+)
+def update_currency_store(currency):
+    return currency if currency else "USD"
 if __name__ == "__main__":
+    if os.environ.get("WERKZEUG_RUN_MAIN") == "true":
+        print("\n🚀 Iniciando pre-carga de modelos AI...")
+        for c in ["BTC", "ETH", "SOL", "AVAX"]:
+            get_predicciones_lstm_real(c)
+        print("✅ Todos los modelos están listos.\n")
+    
     app.run(debug=True)
