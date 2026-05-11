@@ -1,6 +1,7 @@
 from dash import Input, Output, State, callback, no_update
 from dash.exceptions import PreventUpdate
 import dash
+from core.prediction_pipeline import PredictionPipeline
 
 def register_callbacks(app, pipeline: PredictionPipeline):
 

@@ -4,12 +4,15 @@ import plotly.graph_objects as go
 import sys, os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from pages.mock_data import (
-    get_decision_rl, get_historico, get_metricas,
+    get_historico,
     get_rentabilidad_periodica, get_rentabilidad_all,
-    get_rentabilidad_absoluta, get_historial_operaciones,
-    BASE_PRICES, CRYPTO_COLORS
+    get_rentabilidad_absoluta,
+    CRYPTO_COLORS
 )
-from pages.lstm_utils import format_price, CURRENCY_RATES, get_predicciones_lstm_real
+from pages.currency_utils import format_price, CURRENCY_RATES
+
+from pages.api_client import get_predicciones_lstm_real, get_decision_rl
+from pages.db_utils import get_trades
 os.environ["TF_ENABLE_ONEDNN_OPTS"] = "0"
 dash.register_page(__name__, path="/", name="Visión General")
 CRIPTOS    = ["ALL", "BTC", "ETH", "SOL", "AVAX"]
@@ -17,7 +20,6 @@ CARD_COINS = ["BTC", "ETH", "SOL"]
 PERIODO_LABEL = {"1d": "Diaria", "7d": "Semanal", "1m": "Mensual"}
 # Se usa format_price importado de lstm_utils
 def _mini_chart(coin):
-    # Usamos get_historico pero limitado a las últimas 72 horas para velocidad
     df    = get_historico(coin, 72)
     if df.empty: return go.Figure()
     close = df["close"].tolist()
@@ -146,8 +148,8 @@ layout = html.Div([
         html.Div([
             html.Div([
                 html.Span("Acciones realizadas", className="section-title"),
-                html.Button("＋", id="btn-add-op", className="btn-add-op",
-                            n_clicks=0, title="Añadir operación manual"),
+                html.Button(id="btn-add-op", className="btn-add-op",
+                            n_clicks=0, title="Añadir operación manual", style={"display": "none"}),
             ], className="section-header"),
             html.Div(id="tabla-operaciones", className="ops-table-wrapper"),
         ], className="panel-ops-table"),
@@ -273,7 +275,7 @@ def actualizar_pnl_panel(cripto, periodo, currency):
 )
 def render_tabla_ops(cripto, currency, _):
     if not currency: currency = "USD"
-    ops = get_historial_operaciones()
+    ops = get_trades()
     header = html.Div([
         html.Span("Fecha",  className="ops-th"),
         html.Span("Tipo",   className="ops-th"),
@@ -319,7 +321,7 @@ def autofill_precio(cripto):
     if not cripto:
         return None, ""
     preds  = get_predicciones_lstm_real(cripto)
-    precio = round(preds.get("precio_actual", BASE_PRICES.get(cripto, 0)), 2)
+    precio = round(preds.get("precio_actual", 0), 2)
     hint   = f"Precio de mercado actual ({cripto}): {format_price(precio)}"
     return precio, hint
 
@@ -338,7 +340,12 @@ def update_all_cards(currency, _):
     for coin in CARD_COINS:
         preds = get_predicciones_lstm_real(coin)
         p = preds.get("precio_actual", 0)
-        c = preds.get("cambio_24h", 0)
+        
+        df = get_historico(coin, 1) # Last 24 hours
+        if not df.empty and len(df) >= 24 and p > 0:
+            c = ((p - df.iloc[0]["close"]) / df.iloc[0]["close"]) * 100
+        else:
+            c = 0
         
         prices.append(format_price(p, currency))
         badges.append(f"{'+' if c>=0 else ''}{c:.2f}%")

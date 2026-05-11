@@ -6,9 +6,13 @@ import pandas as pd
 import numpy as np
 from datetime import timedelta
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from pages.mock_data import get_decision_rl, BASE_PRICES
-from pages.lstm_utils import get_metrica, get_lstm_shap, get_predicciones_lstm_real, format_price, CURRENCY_RATES
-from pages.rl_utils import get_trained_rl_metrics, get_rl_shap
+
+from pages.api_client import (
+    get_metrica, get_lstm_shap, get_predicciones_lstm_real,
+    get_trained_rl_metrics, get_rl_shap, get_decision_rl
+)
+from pages.currency_utils import format_price, CURRENCY_RATES
+
 
 dash.register_page(__name__, path="/predictions", name="Predicciones IA")
 
@@ -32,7 +36,7 @@ modal_info = html.Div([
     html.Div([
         html.Button("✕", id="modal-close-x-info", n_clicks=0, style={"position": "absolute", "top": "15px", "right": "20px", "background": "transparent", "border": "none", "color": "#94a3b8", "fontSize": "22px", "cursor": "pointer", "zIndex": "10"}),
         html.Div([
-            html.Span("ℹ️ ¿Qué es Bitcoin?", className="modal-title-text"),
+            html.Span("ℹ¿Qué es Bitcoin?", className="modal-title-text"),
         ], className="modal-header-row", style={"borderBottom": "1px solid rgba(59,130,246,0.13)", "paddingBottom": "15px"}),
         html.Div([
             html.P(
@@ -125,9 +129,16 @@ layout = html.Div([
     html.Div([
         # Card 1: Current Price & 24h Variation
         html.Div([
-            html.Div("Precio Actual", className="pnl-label"),
-            html.Div(id="card-current-price", className="pnl-val", style={"fontSize": "2rem"}),
-            html.Div(id="card-price-change", style={"textAlign": "right", "marginTop": "10px", "fontWeight": "bold"})
+            html.Div([
+                html.Div([
+                    html.Div("Precio Actual", className="pnl-label"),
+                    html.Div(id="card-current-price", className="pnl-val", style={"fontSize": "2.2rem", "fontWeight": "800"}),
+                ]),
+                html.Div(id="card-price-change", style={"textAlign": "right", "fontWeight": "bold"})
+            ], style={"display": "flex", "justifyContent": "space-between", "alignItems": "flex-start"}),
+            
+            # La Franja (Range Bar)
+            html.Div(id="franja-container", style={"marginTop": "25px"})
         ], className="pnl-stat-card", style={"flex": "1", "position": "relative", "padding": "25px"}),
         
         # Card 2: Clickable Metrics + Explainability
@@ -193,9 +204,10 @@ def toggle_modal_info(btn, close_x, backdrop):
     Input("btn-open-metrics", "n_clicks"),
     Input("modal-close-x-metrics", "n_clicks"),
     Input("modal-backdrop-metrics", "n_clicks"),
+    State("store-cripto", "data"),
     prevent_initial_call=True,
 )
-def toggle_modal_metrics(btn, close_x, backdrop):
+def toggle_modal_metrics(btn, close_x, backdrop, cripto):
     ctx = dash.callback_context
     if not ctx.triggered:
         return dash.no_update, dash.no_update, dash.no_update, dash.no_update
@@ -203,9 +215,7 @@ def toggle_modal_metrics(btn, close_x, backdrop):
     trigger_id = ctx.triggered[0]["prop_id"].split(".")[0]
     
     if trigger_id == "btn-open-metrics":
-        # Determinamos la cripto actual desde el store o n_clicks (aquí simplificamos usando BTC o la seleccionada)
-        # Nota: Idealmente pasaríamos el 'store-cripto' como State a este callback
-        cripto = "BTC" # Placeholder, en la práctica se usa el valor del store
+        if not cripto: cripto = "BTC"
         
         # Chart RL metrics
         x_data = list(range(100))
@@ -276,6 +286,7 @@ def toggle_modal_metrics(btn, close_x, backdrop):
     Output("win-rate-rl", "children"),
     Output("profit-factor-rl", "children"),
     Output("trades-rl", "children"),
+    Output("franja-container", "children"),
     Input("store-cripto", "data"),
     Input("store-currency", "data"),
 )
@@ -288,14 +299,23 @@ def update_predictions_page(cripto, currency):
     name = names.get(cripto, cripto)
     title_str = f"{name} ({cripto}) - Predicciones IA"
     
-    # 1. Load Data
+    # 1. Get Real Predictions
+    try:
+        preds = get_predicciones_lstm_real(cripto)
+    except Exception as e:
+        print(f"Error en inferencia real para {cripto}: {e}")
+        preds = {}
+        
+    api_current_price = preds.get("precio_actual", 0)
+
+    # 2. Load Data for chart
     df = load_historical_data(cripto)
     if not df.empty and len(df) >= 25:
-        current_price = df.iloc[-1]['close']
+        current_price = api_current_price if api_current_price > 0 else df.iloc[-1]['close']
         prev_day_price = df.iloc[-25]['close']
         last_time = df.iloc[-1]['timestamp']
     else:
-        current_price = BASE_PRICES.get(cripto, 100)
+        current_price = api_current_price if api_current_price > 0 else 100
         prev_day_price = current_price * 0.98
         last_time = pd.Timestamp.utcnow().tz_convert("Europe/Madrid")
         
@@ -304,20 +324,9 @@ def update_predictions_page(cripto, currency):
     change_color = "#10b981" if change_pct >= 0 else "#ef4444"
     change_style = {"textAlign": "right", "marginTop": "15px", "fontWeight": "bold", "color": change_color, "fontSize": "1.1rem"}
     
-    # 2. Get Real Predictions
-    try:
-        preds = get_predicciones_lstm_real(cripto)
-    except Exception as e:
-        print(f"Error en inferencia real para {cripto}: {e}")
-        from pages.mock_data import get_predicciones_lstm
-        preds = get_predicciones_lstm(cripto)
-    
-    mock_current = preds.get("precio_actual", current_price)
-    scale = current_price / mock_current if mock_current > 0 else 1
-    
     pred_vals = []
     for h in range(1, 5):
-        val = preds[f"{h}h"] * scale
+        val = preds.get(f"{h}h", current_price)
         pred_vals.append(val)
         
     pred_ui = []
@@ -379,17 +388,32 @@ def update_predictions_page(cripto, currency):
             line=dict(color='#3b82f6', width=2)
         ))
         
-        # Ajuste de 1h antes del bloque español (cierre API 17:00 Madrid)
-        future_times = [last_time + pd.Timedelta(hours=i-1) for i in range(1, 5)]
+        # Proyección de las siguientes 4 horas a partir del último dato histórico
+        future_times = [last_time + pd.Timedelta(hours=i) for i in range(1, 5)]
         
-        alpha = 0.005 
-        upper_bound = [v * (1 + alpha * (i+1)) for i, v in enumerate(pred_vals)]
-        lower_bound = [v * (1 - alpha * (i+1)) for i, v in enumerate(pred_vals)]
+        # Para que el gráfico no tenga un salto, el punto de partida debe ser el último histórico
+        chart_start_price = df.iloc[-1]['close']
+        
+        # Usamos los rangos reales devueltos por la API (la franja)
+        api_min = preds.get("min", chart_start_price * 0.99)
+        api_max = preds.get("max", chart_start_price * 1.01)
+
+        
+        # Proyectamos los rangos sobre los 4 pasos (simplificado para el cono)
+        upper_bound = []
+        lower_bound = []
+        for i, v in enumerate(pred_vals):
+            # Proporción del rango total basada en el paso (1h a 4h)
+            ratio = (i + 1) / 4
+            u = chart_start_price + (api_max - chart_start_price) * ratio
+            l = chart_start_price + (api_min - chart_start_price) * ratio
+            upper_bound.append(u)
+            lower_bound.append(l)
         
         future_times_full = [last_time] + future_times
-        pred_vals_full = [current_price] + pred_vals
-        upper_bound_full = [current_price] + upper_bound
-        lower_bound_full = [current_price] + lower_bound
+        pred_vals_full = [chart_start_price] + pred_vals
+        upper_bound_full = [chart_start_price] + upper_bound
+        lower_bound_full = [chart_start_price] + lower_bound
         
         fig.add_trace(go.Scatter(
             x=future_times_full + future_times_full[::-1],
@@ -441,12 +465,18 @@ def update_predictions_page(cripto, currency):
     
     # Get LSTM metrics
     metrics = get_metrica(cripto)
-    rmse_val = f"{metrics.get('rmse_lstm', 0):.3f}"
-    mae_val = f"{metrics.get('mae_lstm', 0):.3f}"
-    mape_val = f"{(metrics.get('mae_lstm', 0) * 100):.1f}%"  # Approximate MAPE
+    
+    rmse_val = f"{metrics.get('rmse_lstm', 0):.4f}"
+    mae_val = f"{metrics.get('mae_lstm', 0):.4f}"
+    
+    # Si el MAPE viene como ratio (ej. 0.05), lo multiplicamos por 100
+    mape = metrics.get('mape_lstm', 0)
+    if 0 < mape < 1: mape *= 100
+    mape_val = f"{mape:.2f}%"
+    
     dir_acc_val = f"{(metrics.get('accuracy_lstm', 0) * 100):.1f}%"
-    r2_val = f"{metrics.get('r2_lstm', 0):.2f}"
-    wf_val = f"{(metrics.get('accuracy_lstm', 0) * 100):.1f} ± 2.5%"  # Approximate
+    r2_val = f"{metrics.get('r2_lstm', 0):.3f}"
+    wf_val = f"{(metrics.get('accuracy_lstm', 0) * 100):.1f}% ±"
     
     # Get RL metrics
     rl_metrics = get_trained_rl_metrics(cripto)
@@ -460,8 +490,65 @@ def update_predictions_page(cripto, currency):
     else:
         sharpe_rl = sortino_rl = max_dd_rl = win_rate_rl = pf_rl = trades_rl = "N/A"
     
+    # 5. La Franja Logic (Usa los valores reales de la API)
+    rate = CURRENCY_RATES.get(currency, CURRENCY_RATES["USD"])["rate"]
+    sym = CURRENCY_RATES.get(currency, CURRENCY_RATES["USD"])["symbol"]
+    
+    # Rango real de la API (La Franja)
+    f_min = preds.get("min")
+    f_max = preds.get("max")
+    
+    # Calcular posición porcentual del precio actual en ese rango futuro
+    if f_max > f_min:
+        pos_pct = (current_price - f_min) / (f_max - f_min)
+    else:
+        pos_pct = 0.5
+        
+    pos_pct = max(0, min(1, pos_pct)) * 100
+    
+    # Cercanía Label
+    if pos_pct > 80: cercania_text = "Cerca del Máximo"
+    elif pos_pct < 20: cercania_text = "Cerca del Mínimo"
+    else: cercania_text = "Zona Neutral"
+    
+    franja_ui = html.Div([
+        html.Div([
+            html.Span(f"Proyección: {sym}{f_min*rate:,.0f}", style={"fontSize": "10px", "color": "#94a3b8"}),
+            html.Span(cercania_text, style={"fontSize": "11px", "fontWeight": "bold", "color": "#3b82f6", "textTransform": "uppercase"}),
+            html.Span(f"{sym}{f_max*rate:,.0f}", style={"fontSize": "10px", "color": "#94a3b8"}),
+        ], style={"display": "flex", "justifyContent": "space-between", "alignItems": "center", "marginBottom": "8px"}),
+        
+        html.Div([
+            # Track
+            html.Div(style={
+                "height": "6px", "width": "100%", "background": "rgba(255,255,255,0.05)", 
+                "borderRadius": "3px", "position": "relative"
+            }, children=[
+                # Fill (gradiente de confianza)
+                html.Div(style={
+                    "position": "absolute", "height": "100%", "left": "0", "width": f"{pos_pct}%",
+                    "background": "linear-gradient(90deg, #3b82f6, #10b981)",
+                    "borderRadius": "3px", "transition": "width 1s ease-in-out"
+                }),
+                # Marker
+                html.Div(style={
+                    "position": "absolute", "height": "14px", "width": "14px", "background": "white",
+                    "borderRadius": "50%", "top": "-4px", "left": f"calc({pos_pct}% - 7px)",
+                    "boxShadow": "0 0 10px rgba(59,130,246,0.8)", "border": "2px solid #3b82f6",
+                    "transition": "left 1s ease-in-out"
+                })
+            ])
+        ], style={"padding": "5px 0"}),
+        
+        html.Div([
+            html.Span("Mín proyectado (4h)", style={"fontSize": "9px", "color": "#475569"}),
+            html.Span("Máx proyectado (4h)", style={"fontSize": "9px", "color": "#475569"}),
+        ], style={"display": "flex", "justifyContent": "space-between", "marginTop": "4px"})
+    ])
+
     return (
         title_str, format_price(current_price, currency), change_str, change_style, fig, pred_ui, rl_ui, 
         rmse_val, mae_val, mape_val, dir_acc_val, r2_val, wf_val,
-        sharpe_rl, sortino_rl, max_dd_rl, win_rate_rl, pf_rl, trades_rl
+        sharpe_rl, sortino_rl, max_dd_rl, win_rate_rl, pf_rl, trades_rl,
+        franja_ui
     )

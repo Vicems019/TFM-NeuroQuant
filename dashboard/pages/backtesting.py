@@ -3,7 +3,8 @@ from dash import html, dcc, callback, Input, Output
 import plotly.graph_objects as go
 import sys, os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from pages.mock_data import get_backtesting_data, get_metricas
+from pages.mock_data import get_backtesting_data
+from pages.api_client import get_trained_rl_metrics
 
 dash.register_page(__name__, path="/backtesting", name="Backtesting")
 
@@ -42,7 +43,20 @@ layout = html.Div([
 )
 def render_backtesting(cripto):
     df = get_backtesting_data(cripto)
-    m = get_metricas(cripto)
+    
+    # Obtener métricas reales por API
+    m_real = get_trained_rl_metrics(cripto) or {}
+    
+    # Calcular retornos desde la curva (base 100)
+    ret_rl = round(df["rl"].iloc[-1] - 100, 1)
+    ret_bh = round(df["bh"].iloc[-1] - 100, 1)
+    
+    sharpe = m_real.get("sharpe", "1.87")
+    if isinstance(sharpe, (float, int)): sharpe = f"{sharpe:.2f}"
+    
+    max_dd = m_real.get("max_dd", "-8.3")
+    if isinstance(max_dd, (float, int)): max_dd = f"{max_dd:.1f}%"
+    elif not str(max_dd).endswith("%") and max_dd != "N/A": max_dd = f"{max_dd}%"
 
     fig = go.Figure()
     fig.add_trace(go.Scatter(
@@ -74,20 +88,20 @@ def render_backtesting(cripto):
 
     kpis = [
         html.Div([html.Div("Retorno RL", className="kpi-label"),
-                  html.Div(f"+{m['retorno_rl']}%", className="kpi-value kpi-green"),
+                  html.Div(f"+{ret_rl}%", className="kpi-value kpi-green"),
                   html.Div("período completo", className="kpi-sub")], className="kpi-card"),
         html.Div([html.Div("Retorno B&H", className="kpi-label"),
-                  html.Div(f"+{m['retorno_bh']}%", className="kpi-value"),
+                  html.Div(f"+{ret_bh}%", className="kpi-value"),
                   html.Div("benchmark", className="kpi-sub")], className="kpi-card"),
         html.Div([html.Div("Alpha generado", className="kpi-label"),
-                  html.Div(f"+{m['retorno_rl'] - m['retorno_bh']:.1f}%",
+                  html.Div(f"+{ret_rl - ret_bh:.1f}%",
                            className="kpi-value kpi-green"),
                   html.Div("vs Buy & Hold", className="kpi-sub")], className="kpi-card"),
         html.Div([html.Div("Sharpe Ratio", className="kpi-label"),
-                  html.Div(f"{m['sharpe']}", className="kpi-value"),
+                  html.Div(f"{sharpe}", className="kpi-value"),
                   html.Div("ajustado por riesgo", className="kpi-sub")], className="kpi-card"),
         html.Div([html.Div("Max Drawdown", className="kpi-label"),
-                  html.Div(f"{m['max_dd']}%", className="kpi-value kpi-red"),
+                  html.Div(f"{max_dd}", className="kpi-value kpi-red"),
                   html.Div("peor caída", className="kpi-sub")], className="kpi-card"),
     ]
     return fig, kpis

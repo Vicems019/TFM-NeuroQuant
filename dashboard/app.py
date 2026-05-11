@@ -1,19 +1,54 @@
-import dash
 import os
 import sys
+import requests
+import json
+# Solución para el error OMP #15 en Windows
+os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
+
+# Añadir el directorio raíz al path para que las importaciones de 'core' funcionen
+root_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+print(root_dir)
+if root_dir not in sys.path:
+    sys.path.insert(0, root_dir)
+
+import dash
+import logging
 from dash import Dash, html, dcc, Input, Output, State, callback
+from core.cache_config import setup_cache, cache
+# El procesamiento local se ha movido a la nube (ngrok)
+from pages.api_client import _prepare_X_input, preload_all_data
 
-# Añadir el directorio raíz al path para que las importaciones de 'dashboard' funcionen
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from dashboard.pages.lstm_utils import get_predicciones_lstm_real
+
+# Configuración de logging básica
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+import diskcache
+cache_obj = diskcache.Cache("./cache_dir")
+
+# Inicializar precarga de datos
+preload_all_data()
+
+
+
+
 app = Dash(
     __name__,
     use_pages=True,
+    pages_folder="pages",
     suppress_callback_exceptions=True,
     title="NeuroQuant · Crypto AI",
-    meta_tags=[{"name": "viewport", "content": "width=device-width, initial-scale=1"}]
+    meta_tags=[{"name": "viewport", "content": "width=device-width, initial-scale=1"}],
+    background_callback_manager=dash.DiskcacheManager(cache_obj)
 )
+
+cache = setup_cache(app)
+
+# Configuración de la aplicación
+logger.info("📡 Dashboard configurado para modo Cloud (ngrok)")
+
+
 server = app.server
 # ── TOPBAR ──────────────────────────────────────────────────────────────────
 topbar = html.Div([
@@ -33,6 +68,7 @@ topbar = html.Div([
             html.Button("⚙", id="btn-settings", className="icon-btn", title="Ajustes"),
             href="/settings"
         ),
+        html.Div(id="topbar-user-name", style={"fontWeight": "600", "color": "var(--text-primary)", "fontSize": "13px", "marginRight": "12px"}),
         dcc.Link(
             html.Button("👤", id="btn-profile", className="icon-btn icon-btn-profile", title="Perfil"),
             href="/profile"
@@ -47,6 +83,7 @@ sidebar = html.Div([
     html.Div([
         html.Div("📊  ANÁLISIS", className="sidebar-section-label"),
         dcc.Link(html.Div(["◈ ", html.Span("Visión General")],  className="sidebar-item"), href="/"),
+        dcc.Link(html.Div(["📈 ", html.Span("Paper Trading")], className="sidebar-item"), href="/paper-trading"),
     ], className="sidebar-section"),
     # Section 2
     html.Div([
@@ -54,6 +91,7 @@ sidebar = html.Div([
         dcc.Link(html.Div(["₿ ", html.Span("Bitcoin  (BTC)")],  className="sidebar-item"), href="/predictions?coin=BTC"),
         dcc.Link(html.Div(["Ξ ", html.Span("Ethereum (ETH)")],  className="sidebar-item"), href="/predictions?coin=ETH"),
         dcc.Link(html.Div(["◎ ", html.Span("Solana   (SOL)")],  className="sidebar-item"), href="/predictions?coin=SOL"),
+        dcc.Link(html.Div(["⟠ ", html.Span("Avalanche (AVAX)")],  className="sidebar-item"), href="/predictions?coin=AVAX"),
     ], className="sidebar-section"),
     # Section 3
     html.Div([
@@ -73,8 +111,9 @@ app.layout = html.Div([
     dcc.Store(id="store-predicciones", data={}),
     dcc.Store(id="store-decision",     data={}),
     dcc.Store(id="store-currency",     data="USD", storage_type="local"),
+    dcc.Store(id="auth-token",         storage_type="session"),
     dcc.Interval(id="intervalo-auto",  interval=5 * 60 * 1000, n_intervals=0),
-    topbar,
+    html.Div(topbar, id="topbar-container"),
     backdrop,
     sidebar,
     html.Div(dash.page_container, className="page-wrapper"),
@@ -128,11 +167,30 @@ def sync_cripto(search, btn_clicks, current):
 )
 def update_currency_store(currency):
     return currency if currency else "USD"
+
+@callback(
+    Output("topbar-container", "style"),
+    Output("sidebar", "style"),
+    Output("global-url", "pathname", allow_duplicate=True),
+    Input("global-url", "pathname"),
+    State("auth-token", "data"),
+    prevent_initial_call="initial_duplicate"
+)
+def manage_routing(pathname, auth):
+    if pathname in ["/login", "/register"]:
+        return {"display": "none"}, {"display": "none"}, dash.no_update
+    if not auth:
+        return {"display": "none"}, {"display": "none"}, "/login"
+    return {}, {}, dash.no_update
+
+@callback(
+    Output("topbar-user-name", "children"),
+    Input("auth-token", "data")
+)
+def update_topbar_user(auth):
+    return f"Hola, {auth}" if auth else ""
+
+
+
 if __name__ == "__main__":
-    if os.environ.get("WERKZEUG_RUN_MAIN") == "true":
-        print("\n🚀 Iniciando pre-carga de modelos AI...")
-        for c in ["BTC", "ETH", "SOL", "AVAX"]:
-            get_predicciones_lstm_real(c)
-        print("✅ Todos los modelos están listos.\n")
-    
     app.run(debug=True)

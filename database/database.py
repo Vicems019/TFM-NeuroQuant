@@ -15,22 +15,18 @@ def create_database():
             CREATE TABLE IF NOT EXISTS operaciones (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 user_id INTEGER NOT NULL,
-                crypto_symbol TEXT NOT NULL,
+                crypto_id TEXT NOT NULL,
                 tipo TEXT NOT NULL CHECK(tipo IN ('BUY','SELL')),
                 cantidad REAL NOT NULL,
                 precio REAL NOT NULL,
                 fecha TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY(user_id) REFERENCES usuarios(id)
+                FOREIGN KEY(user_id) REFERENCES usuarios(id),
+                FOREIGN KEY(crypto_id) REFERENCES criptomonedas(id)
             );
-            CREATE TABLE IF NOT EXISTS predicciones (
+            CREATE TABLE IF NOT EXISTS criptomonedas (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
-                user_id INTEGER NOT NULL,
-                crypto_symbol TEXT NOT NULL,
-                direccion TEXT CHECK(direccion IN ('UP','DOWN')),
-                precio_objetivo REAL,
-                fecha_prediccion TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                fecha_limite TIMESTAMP,
-                FOREIGN KEY(user_id) REFERENCES usuarios(id)
+                nombre TEXT NOT NULL,
+                descripcion TEXT NOT NULL
             );
         """)
         print("✅ Base de datos lista")

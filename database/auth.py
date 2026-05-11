@@ -3,10 +3,15 @@ import bcrypt
 
 DB_NAME = "neuroquant_db.db"
 
-def register_user(username, password):
+def register_user(username, password, email=""):
 
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
+    
+    try:
+        cursor.execute("ALTER TABLE usuarios ADD COLUMN email TEXT")
+    except sqlite3.OperationalError:
+        pass
 
     password_hash = bcrypt.hashpw(
         password.encode(),
@@ -16,9 +21,9 @@ def register_user(username, password):
     try:
 
         cursor.execute("""
-        INSERT INTO users (username, password_hash)
-        VALUES (?, ?)
-        """, (username, password_hash))
+        INSERT INTO usuarios (username, password_hash, email)
+        VALUES (?, ?, ?)
+        """, (username, password_hash, email))
         conn.commit()
 
         return True
@@ -36,7 +41,7 @@ def login_user(username, password):
 
     cursor.execute("""
     SELECT password_hash
-    FROM users
+    FROM usuarios
     WHERE username = ?
     """, (username,))
 

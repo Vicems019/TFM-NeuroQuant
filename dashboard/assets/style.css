@@ -370,7 +370,7 @@ a {
 /* ── TOP 3 CHART CARDS ──────────────────────────────────────────────────── */
 .chart-cards-row {
     display: grid;
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
     gap: 14px;
     margin-bottom: 18px;
 }

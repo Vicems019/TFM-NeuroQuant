@@ -5,6 +5,7 @@ from typing import Tuple
 import numpy as np
 import torch
 
+
 @dataclass
 class PredictionResult:
     symbol: str
@@ -15,53 +16,24 @@ class PredictionResult:
     metrics: dict                 # RMSE, MAE, Sharpe, etc.
     latency_ms: float
 
+
+USE_CLOUD = True
+
 class PredictionPipeline:
     def __init__(self, model_manager, cache):
         self.mm = model_manager
         self.cache = cache
         self._executor = concurrent.futures.ThreadPoolExecutor(max_workers=4)
 
-    def run(self, symbol: str, market_data: np.ndarray, 
-            timeframe: str = "1h") -> PredictionResult:
-        """
-        Ejecuta LSTM + SAC en paralelo cuando es posible.
-        LSTM → features → SAC (secuencial donde se necesita)
-        """
-        import time
-        start = time.perf_counter()
+    def run(self, symbol, market_data, timeframe="1h"):
+        if USE_CLOUD:
+            result = predict_cloud(symbol, market_data)
+            if result:
+                logger.info(f"☁️  [{symbol}] Cloud OK — {result.latency_ms}ms")
+                return result
+            logger.warning(f"⚠️  [{symbol}] Cloud falló — usando local")
 
-        # Cache hit rápido
-        cache_key = f"pipeline:{symbol}:{timeframe}:{hash(market_data.tobytes())}"
-        cached = self.cache.get(cache_key)
-        if cached:
-            return cached
-
-        # 1. LSTM Predicción
-        lstm_result = self._run_lstm(symbol, market_data)
-        
-        # 2. Preparar estado para SAC + calcular métricas (paralelo)
-        with concurrent.futures.ThreadPoolExecutor(max_workers=2) as ex:
-            sac_future = ex.submit(self._run_sac, symbol, market_data, lstm_result)
-            metrics_future = ex.submit(self._compute_metrics, market_data, lstm_result)
-            
-            decision, action_probs = sac_future.result()
-            metrics = metrics_future.result()
-
-        latency = (time.perf_counter() - start) * 1000
-
-        result = PredictionResult(
-            symbol=symbol,
-            predictions=lstm_result,
-            confidence=self._compute_confidence(lstm_result),
-            decision=decision,
-            action_probs=action_probs,
-            metrics=metrics,
-            latency_ms=latency
-        )
-
-        # Guardar en caché
-        self.cache.set(cache_key, result, timeout=120)
-        return result
+        return self._run_local(symbol, market_data)
 
     @torch.no_grad()
     def _run_lstm(self, symbol: str, data: np.ndarray) -> np.ndarray:

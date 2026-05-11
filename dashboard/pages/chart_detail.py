@@ -4,7 +4,7 @@ import plotly.graph_objects as go
 import sys, os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from pages.mock_data import get_historico
-from pages.lstm_utils import get_predicciones_lstm_real, format_price
+from pages.api_client import get_predicciones_lstm_real
 dash.register_page(__name__, path="/chart-detail", name="Gráfico detallado")
 CRIPTOS = ["BTC", "ETH", "SOL", "AVAX"]
 RANGOS  = {"1d": 1, "3d": 3, "7d": 7, "14d": 14, "1m": 30}

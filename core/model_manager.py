@@ -3,6 +3,7 @@ import threading
 from pathlib import Path
 from typing import Dict, Optional
 import logging
+import numpy as np
 
 logger = logging.getLogger(__name__)
 
@@ -29,15 +30,6 @@ class ModelManager:
         logger.info(f"ModelManager inicializado en device: {self._device}")
 
     def preload_models(self, model_configs: Dict[str, dict]):
-        """
-        Precarga todos los modelos al arrancar la app.
-        
-        Args:
-            model_configs: {
-                'BTC_LSTM': {'path': '...', 'class': LSTMModel, 'params': {...}},
-                'BTC_SAC':  {'path': '...', 'class': SACAgent, 'params': {...}},
-            }
-        """
         threads = []
         for model_id, config in model_configs.items():
             t = threading.Thread(
@@ -51,8 +43,6 @@ class ModelManager:
         # Esperar a que todos carguen
         for t in threads:
             t.join()
-        
-        logger.info(f"✅ Modelos precargados: {list(self._models.keys())}")
 
     def _load_single_model(self, model_id: str, config: dict):
         """Carga un modelo de forma segura."""
@@ -60,31 +50,51 @@ class ModelManager:
             model_class = config['class']
             model = model_class(**config.get('params', {}))
             
-            state_dict = torch.load(
-                config['path'],
-                map_location=self._device,
-                weights_only=True  # Seguridad: evita pickle arbitrario
-            )
-            model.load_state_dict(state_dict)
+            # Comprobar si el modelo tiene un método de carga personalizado (como SACAgent)
+            if hasattr(model, 'load'):
+                logger.info(f"Cargando modelo con método .load(): {model_id}")
+                model.load(config['path'], device=str(self._device))
+            else:
+                # Carga estándar de PyTorch
+                logger.info(f"Cargando modelo PyTorch: {model_id}")
+                state_dict = torch.load(
+                    config['path'],
+                    map_location=self._device,
+                    weights_only=True
+                )
+                model.load_state_dict(state_dict)
+                model.to(self._device)
+            
             model.eval()
-            model.to(self._device)
             
             # Warm-up: primera inferencia es siempre más lenta
-            self._warmup_model(model, config)
+            self._warmup_model(model_id, model, config)
             
             self._models[model_id] = model
             self._model_locks[model_id] = threading.Lock()
-            logger.info(f"✅ {model_id} cargado y warm-up completado")
             
         except Exception as e:
             logger.error(f"❌ Error cargando {model_id}: {e}")
+            import traceback
+            logger.error(traceback.format_exc())
 
-    def _warmup_model(self, model, config):
+    def _warmup_model(self, model_id, model, config):
         """Ejecuta inferencia dummy para compilar kernels CUDA."""
-        with torch.no_grad():
-            dummy = torch.zeros(1, config.get('seq_len', 60), 
-                              config.get('features', 5)).to(self._device)
-            model(dummy)
+        try:
+            with torch.no_grad():
+                # Diferente forma de dummy según el tipo de modelo
+                class_name = config.get('class').__name__ if hasattr(config.get('class'), '__name__') else ''
+                if 'SAC' in class_name:
+                    # SAC espera (batch, state_dim)
+                    dummy = np.zeros((1, config.get('state_dim', 643)), dtype=np.float32)
+                    model.predict(dummy)
+                else:
+                    # LSTM espera (batch, seq_len, features)
+                    dummy = torch.zeros(1, config.get('seq_len', 60), 
+                                      config.get('features', 5)).to(self._device)
+                    model(dummy)
+        except Exception as e:
+            logger.warning(f"⚠️ Warm-up falló para {model_id}: {e}")
 
     def get_model(self, model_id: str) -> Optional[torch.nn.Module]:
         """Obtiene modelo thread-safe."""
