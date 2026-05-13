@@ -10,12 +10,13 @@ def create_database():
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 username TEXT UNIQUE NOT NULL,
                 password_hash TEXT NOT NULL,
+                saldo_cash REAL NOT NULL DEFAULT 10000.0,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             );
             CREATE TABLE IF NOT EXISTS operaciones (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 user_id INTEGER NOT NULL,
-                crypto_id TEXT NOT NULL,
+                crypto_id INTEGER NOT NULL,
                 tipo TEXT NOT NULL CHECK(tipo IN ('BUY','SELL')),
                 cantidad REAL NOT NULL,
                 precio REAL NOT NULL,
@@ -26,10 +27,23 @@ def create_database():
             CREATE TABLE IF NOT EXISTS criptomonedas (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 nombre TEXT NOT NULL,
-                descripcion TEXT NOT NULL
+                descripcion TEXT NOT NULL,
+                symbol TEXT NOT NULL
             );
         """)
         print("✅ Base de datos lista")
+
+def insert_data():
+    with sqlite3.connect(DB_NAME) as conn:
+        cursor = conn.cursor()
+        cursor.execute("""
+            INSERT INTO criptomonedas (nombre, descripcion, symbol) VALUES
+            ('Bitcoin',   'Criptomoneda descentralizada', 'BTC'),
+            ('Ethereum',  'Plataforma de contratos',      'ETH'),
+            ('Solana',    'Blockchain de alta velocidad', 'SOL'),
+            ('Avalanche', 'Red multicadena',              'AVAX');
+        """)
+        conn.commit()
 
 if __name__ == "__main__":
     create_database()

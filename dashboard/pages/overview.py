@@ -9,11 +9,14 @@ from pages.mock_data import (
     get_rentabilidad_absoluta,
     CRYPTO_COLORS
 )
+
 from pages.currency_utils import format_price, CURRENCY_RATES
+from pages.api_client import get_predicciones_lstm_real, get_decision_rl
 
 from database.db_utils import get_trades, get_last_operations
 os.environ["TF_ENABLE_ONEDNN_OPTS"] = "0"
-dash.register_page(__name__, path="/", name="Visión General")
+
+dash.register_page(__name__, path="/home/", name="Visión General")
 CRIPTOS    = ["ALL", "BTC", "ETH", "SOL", "AVAX"]
 CARD_COINS = ["BTC", "ETH", "SOL"]
 PERIODO_LABEL = {"1d": "Diaria", "7d": "Semanal", "1m": "Mensual"}
@@ -52,74 +55,8 @@ def chart_card_skeleton(coin):
             type="default", color="#3b82f6"
         ),
     ], className="chart-card")
-# ── CUSTOM MODAL ─────────────────────────────────────
-modal = html.Div([
-    html.Div(id="modal-backdrop", className="modal-backdrop-custom", n_clicks=0),
-    html.Div([
-        html.Div([
-            html.Span("➕ Nueva operación", className="modal-title-text"),
-            html.Button("✕", id="modal-close-x", className="modal-close-x", n_clicks=0),
-        ], className="modal-header-row"),
-        html.Div([
-            html.Div([
-                html.Div([
-                    html.Label("Tipo", className="modal-label"),
-                    dcc.Dropdown(id="modal-tipo",
-                        options=[{"label": t, "value": t} for t in ["COMPRAR", "VENDER", "HOLD"]],
-                        value="COMPRAR", clearable=False, className="modal-dropdown"),
-                ], className="modal-field"),
-                html.Div([
-                    html.Label("Criptomoneda", className="modal-label"),
-                    dcc.Dropdown(id="modal-cripto",
-                        options=[{"label": c, "value": c} for c in ["BTC","ETH","SOL","AVAX"]],
-                        value="BTC", clearable=False, className="modal-dropdown"),
-                ], className="modal-field"),
-            ], className="modal-row-2"),
-            html.Div([
-                html.Div([
-                    html.Label("Precio de entrada ($)", className="modal-label"),
-                    dcc.Input(id="modal-precio", type="number", placeholder="auto",
-                              className="modal-input", debounce=False),
-                ], className="modal-field"),
-                html.Div([
-                    html.Label("Cantidad", className="modal-label"),
-                    dcc.Input(id="modal-cantidad", type="number", placeholder="ej. 0.01",
-                              className="modal-input"),
-                ], className="modal-field"),
-            ], className="modal-row-2"),
-            html.Div([
-                html.Label("Margen (%)", className="modal-label"),
-                html.Div([
-                    dcc.Input(id="modal-margen", type="number", placeholder="ej. 10",
-                              min=1, max=100, step=1, className="modal-input modal-input-sm"),
-                    html.Span("× apalancamiento", className="modal-hint"),
-                ], className="modal-margen-row"),
-            ], className="modal-field"),
-            html.Div(id="modal-price-hint", className="modal-price-hint"),
-        ], className="modal-body-custom"),
-        html.Div([
-            html.Button("Cancelar",         id="modal-cancel",  className="btn-modal-cancel",  n_clicks=0),
-            html.Button("Confirmar operación", id="modal-confirm", className="btn-modal-confirm", n_clicks=0),
-        ], className="modal-footer-row"),
-    ], className="modal-panel"),
-], id="modal-wrapper", style={"display": "none"})
 # ── LAYOUT ────────────────────────────────────────────────────────────────────
 layout = html.Div([
-    modal,
-    # Cabecera: saludo + ajustes
-    html.Div([
-        html.Div([
-            html.Div(id="overview-greeting", className="overview-greeting"),
-            html.Div("Aquí tienes el resumen del mercado", className="overview-greeting-sub"),
-        ]),
-        dcc.Link(
-            html.Button([
-                html.Span("⚙", style={"marginRight": "6px"}),
-                "Ajustes",
-            ], className="btn-settings-overview"),
-            href="/settings",
-        ),
-    ], className="overview-header-row"),
     # Selector ALL | BTC | ETH | SOL | AVAX
     html.Div([
         *[html.Button(c, id={"type": "btn-cripto", "index": c},

@@ -5,7 +5,7 @@ import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from database.auth import login_user
 
-dash.register_page(__name__, path="/login", name="Login")
+dash.register_page(__name__, path="/login/", name="Login")
 
 layout = html.Div([
     html.Div([
@@ -70,8 +70,8 @@ def toggle_password(n, current_type):
     return "password", "👁"
 
 @callback(
-    Output("auth-token", "data"),
-    Output("global-url", "pathname"),
+    Output("auth-token", "data", allow_duplicate=True),
+    Output("global-url", "pathname", allow_duplicate=True),
     Output("login-msg", "children"),
     Input("login-btn", "n_clicks"),
     State("login-user", "value"),
@@ -82,5 +82,5 @@ def do_login(n, user, pwd):
     if not user or not pwd:
         return dash.no_update, dash.no_update, "Completa todos los campos"
     if login_user(user, pwd):
-        return user, "/", ""
+        return user, "/home/", ""
     return dash.no_update, dash.no_update, "Usuario o contraseña incorrectos"

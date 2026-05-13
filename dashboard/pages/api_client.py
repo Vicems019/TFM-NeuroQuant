@@ -126,9 +126,26 @@ def _call_predict(coin: str) -> dict:
             logger.error(f"❌ Detalle error servidor: {response.json().get('detail', response.text)}")
             return {}
             
-        # TODO QUITAR EL RESPONSE, ES SOLO PARA OBSERVAR
-        print("Response: ", response.json())
         res_data = response.json()
+
+        print("=" * 60)
+        print(f"[DEBUG] Respuesta completa para {coin}:")
+        print(f"  Claves top-level:     {list(res_data.keys())}")
+        print(f"  lstm:                 {res_data.get('lstm')}")
+        print(f"  rl:                   {res_data.get('rl')}")
+        print(f"  metrics:              {res_data.get('metrics')}")
+        print(f"  explainability keys:  {list((res_data.get('explainability') or {}).keys())}")
+        
+        expl = res_data.get("explainability") or {}
+        lstm_expl = expl.get("lstm") or {}
+        rl_expl   = expl.get("rl")   or {}
+        print(f"  expl.lstm keys:       {list(lstm_expl.keys())}")
+        print(f"  expl.lstm top_feats:  {lstm_expl.get('top_features')}")
+        print(f"  expl.rl keys:         {list(rl_expl.keys())}")
+        print(f"  expl.rl top_feats:    {rl_expl.get('top_features')}")
+        print(f"  expl.rl portfolio:    {rl_expl.get('portfolio_sensitivity')}")
+        print("=" * 60)
+
 
         # Guardamos en caché
         _CACHE[coin] = res_data
@@ -154,38 +171,35 @@ def preload_all_data():
 
 def get_predicciones_lstm_real(coin: str) -> dict:
     data = _call_predict(coin)
-    lstm = data["lstm"]
-    direction_accuracy = data["direction_accuracy"]
-    print("\n\n\n")
-    print(f" Coin: {coin} ")
-    print(lstm)
-    print("\n\n\n")
+    lstm = data.get("lstm") if isinstance(data, dict) else None
+    if not lstm:
+        return {}
+    direction_accuracy = data.get("direction_accuracy") or {}
     return {
-        "precio_actual": lstm["predicted_price"],
-        "1h":  lstm["1h"],
-        "2h":  lstm["2h"],
-        "3h":  lstm["3h"],
-        "4h":  lstm["4h"],
-        "min": lstm["min"],
-        "max": lstm["max"],
+        "precio_actual": lstm.get("predicted_price", lstm.get("1h", 0)),
+        "1h":  lstm.get("1h", 0),
+        "2h":  lstm.get("2h", 0),
+        "3h":  lstm.get("3h", 0),
+        "4h":  lstm.get("4h", 0),
+        "min": lstm.get("min", 0),
+        "max": lstm.get("max", 0),
         "direction_accuracy": direction_accuracy,
     }
 
 def get_metrica(coin: str) -> dict:
+    """Métricas alineadas con la respuesta del endpoint /predict (metrics + direction_accuracy)."""
     data = _call_predict(coin)
-    if not data: return {}
-    
-    # Las métricas están anidadas en 'metrics'
-    m = data.get("metrics", {})
-    lstm = data.get("lstm", {})
-    
+    if not data:
+        return {}
+    m = data.get("metrics") or {}
+    wf = data.get("direction_accuracy")
     return {
-        "rmse_lstm":     m.get("rmse", 0.0),
-        "mae_lstm":      m.get("mae", 0.0),
-        "mape_lstm":     m.get("mape", 0.0),
-        "accuracy_lstm": lstm.get("direction_accuracy", 0.65),
-        "r2_lstm":       m.get("r2", 0.0),
-        "sharpe":        m.get("sharpe", 0.0),
+        "rmse_lstm": m.get("rmse", 0.0),
+        "mae_lstm": m.get("mae", 0.0),
+        "mape_lstm": m.get("mape", 0.0),
+        "window_diracc": m.get("window_diracc"),
+        "direction_accuracy_wf": wf if isinstance(wf, dict) else {},
+        "r2_lstm": m.get("r2"),
     }
 
 def get_decision_rl(coin: str, preds: dict = None) -> dict:
@@ -199,41 +213,62 @@ def get_decision_rl(coin: str, preds: dict = None) -> dict:
         "confianza": rl.get("confidence", 0.5),
     }
 
+def get_rl_portfolio_sensitivity(coin: str) -> dict:
+    data = _call_predict(coin)
+    expl = (data.get("explainability") or {}).get("rl") if data else None
+    if not expl:
+        return {}
+    return expl.get("portfolio_sensitivity", {})
+
 def get_lstm_shap(coin: str) -> dict:
     data = _call_predict(coin)
-    if not data or "shap" not in data:
-        return {"features": ["Error"], "values": [0]}
-    
-    shap = data["shap"]
+    expl = (data.get("explainability") or {}).get("lstm") if data else None
+    if not expl:
+        return {"top_features": [], "feature_importance": [], "method": "unavailable"}
+
     return {
-        "features": shap.get("feature_names", []),
-        "values":   shap.get("values", []),
+        "method":             expl.get("method", ""),
+        "top_features":       expl.get("top_features", []),      # lista de {feature, shap_value, direction}
+        "feature_importance": expl.get("feature_importance", []),# lista de 20 floats (orden FEATURE_NAMES)
     }
 
+
 def get_rl_shap(coin: str) -> dict:
-    # Si el servidor no devuelve SHAP específico para RL, usamos el del LSTM
     data = _call_predict(coin)
-    if not data: return {"features": [], "values": []}
-    
-    if "rl_shap" in data:
-        return {"features": data["rl_shap"]["feature_names"], "values": data["rl_shap"]["values"]}
-    
-    return get_lstm_shap(coin)
+    expl = (data.get("explainability") or {}).get("rl") if data else None
+    if not expl:
+        return {"top_features": [], "feature_importance": [], "portfolio_sensitivity": {}}
+
+    return {
+        "method":                expl.get("method", ""),
+        "top_features":          expl.get("top_features", []),
+        "feature_importance":    expl.get("feature_importance", []),
+        "portfolio_sensitivity": expl.get("portfolio_sensitivity", {}),
+    }
 
 def get_trained_rl_metrics(coin: str) -> dict:
+    """Métricas RL + backtest desde `metrics` y señales desde `rl` (respuesta /predict)."""
     data = _call_predict(coin)
-    if not data: return {}
-    
-    m = data.get("metrics", {})
-    rl = data.get("rl", {})
-    
+    if not data:
+        return {}
+    m = data.get("metrics") or {}
+    rl = data.get("rl") or {}
+    sharpe = m.get("sharpe_ratio", m.get("sharpe"))
     return {
-        "sharpe":        m.get("sharpe", 0.0),
-        "sortino":       m.get("sortino", m.get("sharpe", 0.0) * 1.1),
-        "max_dd":        m.get("max_drawdown", "N/A"),
-        "win_rate":      f"{rl.get('confidence', 0.5)*100:.1f}%",
+        "sharpe": sharpe,
+        "total_return": m.get("total_return"),
+        "calmar_ratio": m.get("calmar_ratio"),
+        "window_diracc": m.get("window_diracc"),
+        "confidence": rl.get("confidence"),
+        "signal_agreement": rl.get("signal_agreement"),
+        "raw_action": rl.get("raw_action"),
+        "bh_return": m.get("bh_return"),
+        # Compatibilidad con páginas que aún lean claves antiguas
+        "sortino": m.get("sortino"),
+        "max_dd": m.get("max_drawdown", "N/A"),
+        "win_rate": rl.get("confidence"),
         "profit_factor": m.get("profit_factor", "N/A"),
-        "trades":        m.get("total_trades", "N/A"),
+        "trades": m.get("total_trades", "N/A"),
     }
 
 def invalidar_cache(coin: str = None):

@@ -30,9 +30,6 @@ cache_obj = diskcache.Cache("./cache_dir")
 # Inicializar precarga de datos
 preload_all_data()
 
-
-
-
 app = Dash(
     __name__,
     use_pages=True,
@@ -82,7 +79,7 @@ sidebar = html.Div([
     # Section 1
     html.Div([
         html.Div("📊  ANÁLISIS", className="sidebar-section-label"),
-        dcc.Link(html.Div(["◈ ", html.Span("Visión General")],  className="sidebar-item"), href="/"),
+        dcc.Link(html.Div(["◈ ", html.Span("Visión General")],  className="sidebar-item"), href="/home"),
         dcc.Link(html.Div(["📈 ", html.Span("Paper Trading")], className="sidebar-item"), href="/paper-trading"),
     ], className="sidebar-section"),
     # Section 2
@@ -106,7 +103,7 @@ sidebar = html.Div([
 ], id="sidebar", className="sidebar")
 # ── APP LAYOUT ───────────────────────────────────────────────────────────────
 app.layout = html.Div([
-    dcc.Location(id="global-url", refresh=False),
+    dcc.Location(id="global-url", refresh=True),
     dcc.Store(id="store-cripto",       data="BTC"),
     dcc.Store(id="store-predicciones", data={}),
     dcc.Store(id="store-decision",     data={}),
@@ -168,20 +165,22 @@ def sync_cripto(search, btn_clicks, current):
 def update_currency_store(currency):
     return currency if currency else "USD"
 
+
 @callback(
-    Output("topbar-container", "style"),
-    Output("sidebar", "style"),
     Output("global-url", "pathname", allow_duplicate=True),
     Input("global-url", "pathname"),
     State("auth-token", "data"),
-    prevent_initial_call="initial_duplicate"
+    prevent_initial_call=True
 )
-def manage_routing(pathname, auth):
-    if pathname in ["/login", "/register"]:
-        return {"display": "none"}, {"display": "none"}, dash.no_update
-    if not auth:
-        return {"display": "none"}, {"display": "none"}, "/login"
-    return {}, {}, dash.no_update
+def redirect_root_and_login(pathname, auth):
+    if not auth and pathname == "/":
+        return "/login"
+    if auth and pathname == "/login":
+        return "/home"
+    if not auth and pathname == "/home":
+        return "/login"
+    return dash.no_update
+
 
 @callback(
     Output("topbar-user-name", "children"),
@@ -193,4 +192,4 @@ def update_topbar_user(auth):
 
 
 if __name__ == "__main__":
-    app.run(debug=True)
+    app.run(debug=True, use_reloader=True)

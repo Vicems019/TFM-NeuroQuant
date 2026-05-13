@@ -16,6 +16,107 @@ from pages.currency_utils import format_price, CURRENCY_RATES
 
 dash.register_page(__name__, path="/predictions", name="Predicciones IA")
 
+
+def _fmt_window_diracc(v):
+    if v is None:
+        return "—"
+    try:
+        fv = float(v)
+    except (TypeError, ValueError):
+        return str(v)[:14]
+    if -1 <= fv <= 1:
+        return f"{fv * 100:.2f}%"
+    return f"{fv:.4f}"
+
+
+def _fmt_api_float(x, nd=4):
+    if x is None:
+        return "—"
+    try:
+        return f"{float(x):.{nd}f}"
+    except (TypeError, ValueError):
+        return str(x)[:20]
+
+
+def _fmt_rl_confidence(c):
+    if c is None:
+        return "—"
+    try:
+        fc = float(c)
+    except (TypeError, ValueError):
+        return str(c)[:12]
+    if 0 <= fc <= 1:
+        return f"{fc * 100:.1f}%"
+    return f"{fc:.4f}"
+
+
+def _fmt_signal_agreement(sa):
+    if sa is None:
+        return "—"
+    if isinstance(sa, bool):
+        return "Sí" if sa else "No"
+    if isinstance(sa, (int, float)):
+        return f"{float(sa):.4f}"
+    return str(sa)[:24]
+
+
+# Histórico visible en el gráfico (1 semana de velas 1h)
+CHART_HISTORY_HOURS = 24 * 7
+
+
+def _sanitize_forecast_band(p0, pred_vals, raw_min, raw_max):
+    """
+    Banda [min,max] del API alineada con la trayectoria LSTM: en cada hora i la predicción
+    queda dentro del cono; en t=+4h los bordes coinciden con min/max del API (tras saneo).
+    """
+    try:
+        p0 = float(p0)
+        pv = [float(x) for x in pred_vals]
+    except (TypeError, ValueError):
+        return None, None, [], []
+    if len(pv) != 4:
+        return None, None, [], []
+    path_lo = min(p0, min(pv))
+    path_hi = max(p0, max(pv))
+    p4 = pv[3]
+    eps = max(abs(p0) * 5e-4, 1e-8)
+
+    if raw_min is None or raw_max is None:
+        span = max(path_hi - path_lo, eps * 10)
+        fmin = path_lo - span * 0.15
+        fmax = path_hi + span * 0.15
+    else:
+        try:
+            lo, hi = float(raw_min), float(raw_max)
+        except (TypeError, ValueError):
+            span = max(path_hi - path_lo, eps * 10)
+            fmin = path_lo - span * 0.15
+            fmax = path_hi + span * 0.15
+        else:
+            if lo > hi:
+                lo, hi = hi, lo
+            if hi - lo < eps:
+                mid = 0.5 * (lo + hi)
+                lo, hi = mid - eps, mid + eps
+            fmin, fmax = lo, hi
+
+    fmin = min(fmin, path_lo, p4) - eps
+    fmax = max(fmax, path_hi, p4) + eps
+    pad = max((fmax - fmin) * 0.015, eps)
+    fmin -= pad
+    fmax += pad
+
+    mup = max(fmax - p4, eps)
+    mdn = max(p4 - fmin, eps)
+    upper, lower = [], []
+    for i in range(1, 5):
+        pi = pv[i - 1]
+        frac = i / 4.0
+        upper.append(pi + frac * mup)
+        lower.append(pi - frac * mdn)
+    return fmin, fmax, upper, lower
+
+
 def load_historical_data(coin="BTC"):
     path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "data", "raw", f"{coin}_1h_raw.csv")
     if os.path.exists(path):
@@ -59,7 +160,7 @@ modal_metrics = html.Div([
     html.Div([
         html.Button("✕", id="modal-close-x-metrics", n_clicks=0, style={"position": "absolute", "top": "15px", "right": "20px", "background": "transparent", "border": "none", "color": "#94a3b8", "fontSize": "22px", "cursor": "pointer", "zIndex": "10"}),
         html.Div([
-            html.Span("📊 Métricas y Explicabilidad", className="modal-title-text"),
+            html.Span("Métricas y Explicabilidad", className="modal-title-text"),
         ], className="modal-header-row", style={"borderBottom": "1px solid rgba(59,130,246,0.13)", "paddingBottom": "15px"}),
         
         html.Div([
@@ -70,27 +171,25 @@ modal_metrics = html.Div([
                     html.Div([html.Span("RMSE", style={"fontWeight": "bold"}), html.Div(id="rmse-value", className="pnl-val"), html.Span("Error cuadrático medio", className="modal-hint")], className="pnl-stat-card"),
                     html.Div([html.Span("MAE", style={"fontWeight": "bold"}), html.Div(id="mae-value", className="pnl-val"), html.Span("Error absoluto medio", className="modal-hint")], className="pnl-stat-card"),
                     html.Div([html.Span("MAPE", style={"fontWeight": "bold"}), html.Div(id="mape-value", className="pnl-val"), html.Span("Error porcentual medio", className="modal-hint")], className="pnl-stat-card"),
-                    html.Div([html.Span("Dir. Acc.", style={"fontWeight": "bold"}), html.Div(id="dir-acc-value", className="pnl-val green"), html.Span("Precisión direccional", className="modal-hint")], className="pnl-stat-card"),
-                    html.Div([html.Span("R²", style={"fontWeight": "bold"}), html.Div(id="r2-value", className="pnl-val"), html.Span("Coef. de determinación", className="modal-hint")], className="pnl-stat-card"),
-                    html.Div([html.Span("Walk-Forward", style={"fontWeight": "bold"}), html.Div(id="wf-value", className="pnl-val green"), html.Span("Validación en ventanas", className="modal-hint")], className="pnl-stat-card"),
-                ], style={"display": "grid", "gridTemplateColumns": "repeat(3, 1fr)", "gap": "10px"})
+                    html.Div([html.Span("Dir. acc. (ventana)", style={"fontWeight": "bold"}), html.Div(id="dir-acc-value", className="pnl-val green"), html.Span("Acierto de dirección en ventana reciente", className="modal-hint")], className="pnl-stat-card"),
+                ], style={"display": "grid", "gridTemplateColumns": "repeat(2, 1fr)", "gap": "10px"})
             ]),
             
             # RL Metrics
             html.Div([
                 html.H4("Modelo de Decisión (RL SAC)", style={"color": "white", "margin": "20px 0 15px 0"}),
                 html.Div([
-                    html.Div([html.Span("Sharpe Ratio", style={"fontWeight": "bold"}), html.Div(id="sharpe-rl", className="pnl-val green"), html.Span("Retorno vs Volatilidad", className="modal-hint")], className="pnl-stat-card"),
-                    html.Div([html.Span("Sortino", style={"fontWeight": "bold"}), html.Div(id="sortino-rl", className="pnl-val green"), html.Span("Penaliza sólo bajadas", className="modal-hint")], className="pnl-stat-card"),
-                    html.Div([html.Span("Max Drawdown", style={"fontWeight": "bold"}), html.Div(id="max-dd-rl", className="pnl-val red"), html.Span("Máxima pérdida", className="modal-hint")], className="pnl-stat-card"),
-                    html.Div([html.Span("Win Rate", style={"fontWeight": "bold"}), html.Div(id="win-rate-rl", className="pnl-val green"), html.Span("Operaciones ganadoras", className="modal-hint")], className="pnl-stat-card"),
-                    html.Div([html.Span("Profit Factor", style={"fontWeight": "bold"}), html.Div(id="profit-factor-rl", className="pnl-val green"), html.Span("Ganancias vs Pérdidas", className="modal-hint")], className="pnl-stat-card"),
-                    html.Div([html.Span("Trades", style={"fontWeight": "bold"}), html.Div(id="trades-rl", className="pnl-val"), html.Span("Total de operaciones", className="modal-hint")], className="pnl-stat-card"),
-                ], style={"display": "grid", "gridTemplateColumns": "repeat(3, 1fr)", "gap": "10px"}),
+                    html.Div([html.Span("Sharpe ratio", style={"fontWeight": "bold"}), html.Div(id="sharpe-rl", className="pnl-val green"), html.Span("Retorno ajustado por riesgo", className="modal-hint")], className="pnl-stat-card"),
+                    html.Div([html.Span("Retorno total", style={"fontWeight": "bold"}), html.Div(id="total-return-rl", className="pnl-val green"), html.Span("Acumulado en backtest", className="modal-hint")], className="pnl-stat-card"),
+                    html.Div([html.Span("Calmar", style={"fontWeight": "bold"}), html.Div(id="calmar-rl", className="pnl-val green"), html.Span("Rentabilidad vs drawdown máximo", className="modal-hint")], className="pnl-stat-card"),
+                    html.Div([html.Span("Confianza RL", style={"fontWeight": "bold"}), html.Div(id="rl-confidence", className="pnl-val green"), html.Span("Probabilidad asignada a la acción", className="modal-hint")], className="pnl-stat-card"),
+                    html.Div([html.Span("Acuerdo señales", style={"fontWeight": "bold"}), html.Div(id="signal-agreement-rl", className="pnl-val green"), html.Span("Coherencia entre señales", className="modal-hint")], className="pnl-stat-card"),
+                    html.Div([html.Span("Acción raw", style={"fontWeight": "bold"}), html.Div(id="raw-action-rl", className="pnl-val"), html.Span("Salida continua del agente", className="modal-hint")], className="pnl-stat-card"),
+                ], style={"display": "grid", "gridTemplateColumns": "repeat(2, 1fr)", "gap": "10px"}),
                 
                 # Chart below metrics
                 html.Div([
-                    html.Div("Recompensa Acumulada vs B&H", style={"fontSize": "12px", "color": "#94a3b8", "marginBottom": "5px", "marginTop": "10px"}),
+                    html.Div("Ilustrativo: la curva no forma parte del JSON del API (métricas arriba sí)", style={"fontSize": "11px", "color": "#64748b", "marginBottom": "5px", "marginTop": "10px"}),
                     dcc.Graph(id="chart-rl-metrics", config={"displayModeBar": False}, style={"height": "250px", "background": "transparent", "borderRadius": "8px"})
                 ], style={"border": "1px solid rgba(59,130,246,0.13)", "padding": "10px", "borderRadius": "12px", "background": "#0c1428", "marginTop": "15px"})
             ]),
@@ -156,7 +255,10 @@ layout = html.Div([
     html.Div([
         # Left: Chart with Uncertainty Cone
         html.Div([
-            html.Div("Proyección de Precios a 4 Horas", className="section-title", style={"marginBottom": "15px"}),
+            html.Div([
+                html.Span("Proyección de Precios a 4 Horas", className="section-title"),
+                html.Span(" · últimos 7 días + 4 h (tiempo real)", style={"color": "#64748b", "fontSize": "12px", "fontWeight": "500", "marginLeft": "8px"}),
+            ], style={"marginBottom": "15px"}),
             dcc.Graph(id="grafico-prediccion-cono", config={"scrollZoom": True, "displayModeBar": True, "modeBarButtonsToAdd": ['zoomIn2d', 'zoomOut2d']}, style={"height": "530px"})
         ], className="panel-bar-chart", style={"flex": "2.2", "padding": "25px", "display": "flex", "flexDirection": "column"}),
         
@@ -216,15 +318,55 @@ def toggle_modal_metrics(btn, close_x, backdrop, cripto):
     
     if trigger_id == "btn-open-metrics":
         if not cripto: cripto = "BTC"
-        
-        # Chart RL metrics
-        x_data = list(range(100))
-        y_rl = np.cumsum(np.random.normal(0.002, 0.015, 100))
-        y_bh = np.cumsum(np.random.normal(0.001, 0.02, 100))
-        
+
+        # ── Obtener datos ──────────────────────────────────────────────
+        expl_lstm_raw = get_lstm_shap(cripto)
+        expl_rl_raw   = get_rl_shap(cripto)
+        top_lstm      = expl_lstm_raw.get("top_features", [])
+        top_rl        = expl_rl_raw.get("top_features",  [])
+
+        # ── Chart RL ilustrativo (sin cambios) ────────────────────────
+        rl_metrics = get_trained_rl_metrics(cripto) or {}
+        total_ret  = float(rl_metrics.get("total_return") or 16.0)
+        bh_ret     = float(rl_metrics.get("bh_return")    or -24.0)
+        sharpe     = float(rl_metrics.get("sharpe")        or 0.5)
+
+        n      = 180
+        x_data = list(range(n))
+        y_rl   = _build_equity_curve(total_ret, sharpe,       n)
+        y_bh   = _build_equity_curve(bh_ret,   sharpe * 0.25, n)
+
         fig = go.Figure()
-        fig.add_trace(go.Scatter(x=x_data, y=y_rl, name="RL Agent", line=dict(color="#10b981", width=2)))
-        fig.add_trace(go.Scatter(x=x_data, y=y_bh, name="Buy & Hold", line=dict(color="#3b82f6", width=2, dash="dash")))
+        fig.add_trace(go.Scatter(
+            x=x_data, y=y_rl,
+            name=f"RL Agent ({total_ret:+.1f}%)",
+            line=dict(color="#10b981", width=2),
+            fill="tozeroy",
+            fillcolor="rgba(16,185,129,0.06)",
+        ))
+        fig.add_trace(go.Scatter(
+            x=x_data, y=y_bh,
+            name=f"Buy & Hold ({bh_ret:+.1f}%)",
+            line=dict(color="#3b82f6", width=2, dash="dash"),
+        ))
+        fig.add_hline(y=0, line_width=1, line_color="rgba(255,255,255,0.15)")
+        fig.update_layout(
+            paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+            margin=dict(l=5, r=5, t=5, b=5),
+            showlegend=True,
+            legend=dict(orientation="h", y=1.12, bgcolor="rgba(0,0,0,0)", font=dict(size=10)),
+            font=dict(color="#94a3b8", size=10),
+            xaxis=dict(visible=False),
+            yaxis=dict(
+                showgrid=True, gridcolor="rgba(255,255,255,0.05)",
+                zeroline=False, ticksuffix="%"
+            ),
+            hovermode="x unified",
+        )
+
+        fig = go.Figure()
+        fig.add_trace(go.Scatter(x=x_data, y=y_rl, name="RL Agent",    line=dict(color="#10b981", width=2)))
+        fig.add_trace(go.Scatter(x=x_data, y=y_bh, name="Buy & Hold",  line=dict(color="#3b82f6", width=2, dash="dash")))
         fig.update_layout(
             paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
             margin=dict(l=5, r=5, t=5, b=5), showlegend=True,
@@ -233,38 +375,101 @@ def toggle_modal_metrics(btn, close_x, backdrop, cripto):
             xaxis=dict(visible=False),
             yaxis=dict(showgrid=True, gridcolor="rgba(255,255,255,0.05)", zeroline=False),
         )
-        
-        # Expl LSTM Chart con SHAP
-        expl_lstm = get_lstm_shap(cripto)
+
+        # ── Chart LSTM SHAP ───────────────────────────────────────────
+        lstm_names  = [f["feature"]    for f in top_lstm]
+        lstm_vals   = [f["shap_value"] for f in top_lstm]
+        lstm_colors = ["#10b981" if v >= 0 else "#ef4444" for v in lstm_vals]
+        lstm_hover  = [
+            f"<b>{f['feature']}</b><br>SHAP: {f['shap_value']:+.6f}<br>Efecto: {f['direction']}"
+            for f in top_lstm
+        ]
+
         fig_lstm = go.Figure(go.Bar(
-            x=expl_lstm["values"],
-            y=expl_lstm["features"],
-            orientation='h',
-            marker=dict(color='#3b82f6')
+            x=lstm_vals,
+            y=lstm_names,
+            orientation="h",
+            marker=dict(color=lstm_colors, line=dict(color="rgba(255,255,255,0.08)", width=0.5)),
+            text=[f"{v:+.5f}" for v in lstm_vals],
+            textposition="outside",
+            textfont=dict(color="#e2e8f0", size=9),
+            hovertemplate="%{customdata}<extra></extra>",
+            customdata=lstm_hover,
         ))
+        fig_lstm.add_vline(x=0, line_width=1, line_color="rgba(255,255,255,0.2)")
         fig_lstm.update_layout(
-            margin=dict(l=5, r=5, t=5, b=5), paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
-            xaxis=dict(showgrid=True, gridcolor="rgba(255,255,255,0.05)", zeroline=False, visible=False),
-            yaxis=dict(autorange="reversed"), font=dict(color="#e2e8f0", size=10)
+            paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+            margin=dict(l=5, r=60, t=20, b=5),
+            title=dict(text="← Baja precio  /  Sube precio →", font=dict(color="#64748b", size=9), x=0.5),
+            xaxis=dict(showgrid=True, gridcolor="rgba(255,255,255,0.05)", zeroline=False, showticklabels=False),
+            yaxis=dict(autorange="reversed"),
+            font=dict(color="#e2e8f0", size=10),
         )
 
-        # Expl SAC Chart con SHAP
-        expl_rl = get_rl_shap(cripto)
+        # ── Chart SAC SHAP + portfolio sensitivity ────────────────────
+        rl_names  = [f["feature"]    for f in top_rl]
+        rl_vals   = [f["shap_value"] for f in top_rl]
+        rl_colors = ["#10b981" if v >= 0 else "#ef4444" for v in rl_vals]
+        rl_hover  = [
+            f"<b>{f['feature']}</b><br>SHAP: {f['shap_value']:+.6f}<br>Efecto: {f['direction']}"
+            for f in top_rl
+        ]
+
+        ps = expl_rl_raw.get("portfolio_sensitivity", {})
+        portfolio_extra = [
+            ("position (long)",   ps.get("long_position_impact",   0)),
+            ("position (short)",  ps.get("short_position_impact",  0)),
+            ("pnl_impact",        ps.get("pnl_impact_5pct",        0)),
+            ("capital",           ps.get("reduced_capital_impact", 0)),
+        ]
+        for label, val in portfolio_extra:
+            if val != 0:
+                rl_names.append(label)
+                rl_vals.append(val)
+                rl_colors.append("#3b82f6" if val >= 0 else "#f59e0b")
+                rl_hover.append(f"<b>{label}</b><br>Δacción: {val:+.6f}<br>Sensitivity analysis")
+
         fig_sac = go.Figure(go.Bar(
-            x=expl_rl["values"],
-            y=expl_rl["features"],
-            orientation='h',
-            marker=dict(color='#10b981')
+            x=rl_vals,
+            y=rl_names,
+            orientation="h",
+            marker=dict(color=rl_colors, line=dict(color="rgba(255,255,255,0.08)", width=0.5)),
+            text=[f"{v:+.5f}" for v in rl_vals],
+            textposition="outside",
+            textfont=dict(color="#e2e8f0", size=9),
+            hovertemplate="%{customdata}<extra></extra>",
+            customdata=rl_hover,
         ))
+        fig_sac.add_vline(x=0, line_width=1, line_color="rgba(255,255,255,0.2)")
         fig_sac.update_layout(
-            margin=dict(l=5, r=5, t=5, b=5), paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
-            xaxis=dict(showgrid=True, gridcolor="rgba(255,255,255,0.05)", zeroline=False, visible=False),
-            yaxis=dict(autorange="reversed"), font=dict(color="#e2e8f0", size=10)
+            paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+            margin=dict(l=5, r=60, t=20, b=5),
+            title=dict(text="← Pro-venta  /  Pro-compra →", font=dict(color="#64748b", size=9), x=0.5),
+            xaxis=dict(showgrid=True, gridcolor="rgba(255,255,255,0.05)", zeroline=False, showticklabels=False),
+            yaxis=dict(autorange="reversed"),
+            font=dict(color="#e2e8f0", size=10),
         )
-        
-        return {"display": "flex", "position": "fixed", "top": "0", "left": "0", "width": "100%", "height": "100%", "zIndex": "1000", "alignItems": "center", "justifyContent": "center"}, fig, fig_lstm, fig_sac
-        
+
+        return (
+            {"display": "flex", "position": "fixed", "top": "0", "left": "0",
+            "width": "100%", "height": "100%", "zIndex": "1000",
+            "alignItems": "center", "justifyContent": "center"},
+            fig, fig_lstm, fig_sac
+        )
+
     return {"display": "none"}, dash.no_update, dash.no_update, dash.no_update
+
+def _build_equity_curve(total_return: float, sharpe: float, n: int = 180) -> np.ndarray:
+    vol      = max(0.05, 0.12 / max(abs(sharpe), 0.1))
+    drift    = (total_return / 100) / n
+    rng      = np.random.default_rng(seed=42)
+    steps    = rng.normal(drift, vol / np.sqrt(252), n)
+    curve    = np.cumsum(steps) * 100
+    if curve[-1] != 0:
+        curve = curve * (total_return / curve[-1])
+    return curve
+
+
 
 @callback(
     Output("page-title-btc", "children"),
@@ -278,14 +483,12 @@ def toggle_modal_metrics(btn, close_x, backdrop, cripto):
     Output("mae-value", "children"),
     Output("mape-value", "children"),
     Output("dir-acc-value", "children"),
-    Output("r2-value", "children"),
-    Output("wf-value", "children"),
     Output("sharpe-rl", "children"),
-    Output("sortino-rl", "children"),
-    Output("max-dd-rl", "children"),
-    Output("win-rate-rl", "children"),
-    Output("profit-factor-rl", "children"),
-    Output("trades-rl", "children"),
+    Output("total-return-rl", "children"),
+    Output("calmar-rl", "children"),
+    Output("rl-confidence", "children"),
+    Output("signal-agreement-rl", "children"),
+    Output("raw-action-rl", "children"),
     Output("franja-container", "children"),
     Input("store-cripto", "data"),
     Input("store-currency", "data"),
@@ -312,15 +515,24 @@ def update_predictions_page(cripto, currency):
     df = load_historical_data(cripto)
     if not df.empty and len(df) >= 25:
         current_price = api_current_price if api_current_price > 0 else df.iloc[-1]['close']
-        prev_day_price = df.iloc[-25]['close']
         last_time = df.iloc[-1]['timestamp']
+        if len(df) >= CHART_HISTORY_HOURS + 1:
+            prev_ref_price = float(df.iloc[-(CHART_HISTORY_HOURS + 1)]["close"])
+            change_ref_lbl = "vs hace 7 días"
+        else:
+            prev_ref_price = float(df.iloc[-25]["close"])
+            change_ref_lbl = "vs ~24 h"
     else:
         current_price = api_current_price if api_current_price > 0 else 100
-        prev_day_price = current_price * 0.98
+        prev_ref_price = current_price * 0.98
         last_time = pd.Timestamp.utcnow().tz_convert("Europe/Madrid")
+        change_ref_lbl = ""
         
-    change_pct = ((current_price - prev_day_price) / prev_day_price) * 100
-    change_str = f"▲ {change_pct:.2f}% (vs ayer)" if change_pct >= 0 else f"▼ {abs(change_pct):.2f}% (vs ayer)"
+    change_pct = ((current_price - prev_ref_price) / max(prev_ref_price, 1e-12)) * 100
+    if change_ref_lbl:
+        change_str = (f"▲ {change_pct:.2f}% ({change_ref_lbl})" if change_pct >= 0 else f"▼ {abs(change_pct):.2f}% ({change_ref_lbl})")
+    else:
+        change_str = f"▲ {change_pct:.2f}%" if change_pct >= 0 else f"▼ {abs(change_pct):.2f}%"
     change_color = "#10b981" if change_pct >= 0 else "#ef4444"
     change_style = {"textAlign": "right", "marginTop": "15px", "fontWeight": "bold", "color": change_color, "fontSize": "1.1rem"}
     
@@ -353,6 +565,19 @@ def update_predictions_page(cripto, currency):
             "border": "1px solid rgba(255,255,255,0.05)"
         }))
         prev_val = val
+
+    # Banda min/max alineada con la trayectoria (misma lógica para gráfico y franja)
+    chart_start_price = float(df.iloc[-1]["close"]) if not df.empty and len(df) else float(current_price)
+    fmin_bar, fmax_bar, upper_bound, lower_bound = _sanitize_forecast_band(
+        chart_start_price, pred_vals, preds.get("min"), preds.get("max")
+    )
+    if not upper_bound:
+        eps_b = max(abs(chart_start_price) * 0.002, 1e-6)
+        fmin_bar = chart_start_price - eps_b
+        fmax_bar = chart_start_price + eps_b
+        upper_bound = [chart_start_price + eps_b * i / 4 for i in range(1, 5)]
+        lower_bound = [chart_start_price - eps_b * i / 4 for i in range(1, 5)]
+    pred_4h = float(pred_vals[3]) if len(pred_vals) == 4 else chart_start_price
         
     # 3. Decision RL
     decision = get_decision_rl(cripto, preds)
@@ -381,60 +606,59 @@ def update_predictions_page(cripto, currency):
     fig = go.Figure()
     
     if not df.empty:
-        df_plot = df.tail(48)
+        n_hist = min(len(df), CHART_HISTORY_HOURS)
+        df_plot = df.tail(n_hist)
         fig.add_trace(go.Scatter(
             x=df_plot['timestamp'], y=df_plot['close'],
-            mode='lines', name='Histórico',
+            mode='lines', name='Histórico (7 días)',
             line=dict(color='#3b82f6', width=2)
         ))
         
-        # Proyección de las siguientes 4 horas a partir del último dato histórico
+        # Proyección en el eje X con horas reales (+1h … +4h respecto al último dato)
         future_times = [last_time + pd.Timedelta(hours=i) for i in range(1, 5)]
-        
-        # Para que el gráfico no tenga un salto, el punto de partida debe ser el último histórico
-        chart_start_price = df.iloc[-1]['close']
-        
-        # Usamos los rangos reales devueltos por la API (la franja)
-        api_min = preds.get("min", chart_start_price * 0.99)
-        api_max = preds.get("max", chart_start_price * 1.01)
-
-        
-        # Proyectamos los rangos sobre los 4 pasos (simplificado para el cono)
-        upper_bound = []
-        lower_bound = []
-        for i, v in enumerate(pred_vals):
-            # Proporción del rango total basada en el paso (1h a 4h)
-            ratio = (i + 1) / 4
-            u = chart_start_price + (api_max - chart_start_price) * ratio
-            l = chart_start_price + (api_min - chart_start_price) * ratio
-            upper_bound.append(u)
-            lower_bound.append(l)
-        
         future_times_full = [last_time] + future_times
         pred_vals_full = [chart_start_price] + pred_vals
         upper_bound_full = [chart_start_price] + upper_bound
         lower_bound_full = [chart_start_price] + lower_bound
-        
+        pred_hover = ["Último cierre", "+1 h", "+2 h", "+3 h", "+4 h"]
+
         fig.add_trace(go.Scatter(
             x=future_times_full + future_times_full[::-1],
             y=upper_bound_full + lower_bound_full[::-1],
             fill='toself',
-            fillcolor='rgba(59, 130, 246, 0.15)',
+            fillcolor='rgba(59, 130, 246, 0.18)',
             line=dict(color='rgba(255,255,255,0)'),
             hoverinfo="skip",
             showlegend=False,
-            name='Umbral de Confianza'
+            name='Umbral (API + trayectoria)'
+        ))
+        # Contorno suave del cono
+        fig.add_trace(go.Scatter(
+            x=future_times_full, y=upper_bound_full,
+            mode='lines', line=dict(color='rgba(59,130,246,0.45)', width=1),
+            hoverinfo="skip", showlegend=False, name=''
+        ))
+        fig.add_trace(go.Scatter(
+            x=future_times_full, y=lower_bound_full,
+            mode='lines', line=dict(color='rgba(59,130,246,0.45)', width=1),
+            hoverinfo="skip", showlegend=False, name=''
         ))
         
         fig.add_trace(go.Scatter(
             x=future_times_full, y=pred_vals_full,
-            mode='lines+markers', name='Predicción',
-            line=dict(color='#f59e0b', width=2, dash='dash'),
-            marker=dict(size=6, color='#f59e0b')
+            mode='lines+markers', name='Predicción LSTM',
+            line=dict(color='#f59e0b', width=2.5, dash='dash'),
+            marker=dict(size=8, color='#f59e0b', line=dict(width=1, color='rgba(255,255,255,0.35)')),
+            text=pred_hover,
+            hovertemplate="<b>%{text}</b><br>%{y:,.4f}<extra></extra>",
         ))
+        fig.add_vline(
+            x=last_time, line_width=1, line_dash="dot",
+            line_color="rgba(148,163,184,0.55)", layer="below"
+        )
         
-        max_pred = max(upper_bound)
-        min_pred = min(lower_bound)
+        max_pred = upper_bound[-1]
+        min_pred = lower_bound[-1]
         
         rate = CURRENCY_RATES.get(currency, CURRENCY_RATES["USD"])["rate"]
         sym = CURRENCY_RATES.get(currency, CURRENCY_RATES["USD"])["symbol"]
@@ -451,104 +675,134 @@ def update_predictions_page(cripto, currency):
             showarrow=True, arrowhead=2, arrowsize=1, arrowwidth=2, arrowcolor="#ef4444",
             font=dict(color="#ef4444", size=11), yshift=-10
         )
-    
+        y_lo = min(
+            float(df_plot["close"].min()),
+            float(min(lower_bound)),
+            float(chart_start_price),
+            float(min(pred_vals)),
+        ) * 0.9985
+        y_hi = max(
+            float(df_plot["close"].max()),
+            float(max(upper_bound)),
+            float(chart_start_price),
+            float(max(pred_vals)),
+        ) * 1.0015
+        if y_hi <= y_lo:
+            y_hi = y_lo * 1.002
+        x_hist_min = df_plot["timestamp"].min()
+        x_future_end = last_time + pd.Timedelta(hours=5)
+        x_range = [x_hist_min, x_future_end]
+    else:
+        y_lo, y_hi = None, None
+        x_range = None
+
+    yaxis_cfg = dict(
+        showgrid=True, gridcolor="rgba(255,255,255,0.05)", zeroline=False,
+        tickprefix=CURRENCY_RATES.get(currency, CURRENCY_RATES["USD"])["symbol"],
+    )
+    if y_lo is not None and y_hi is not None:
+        yaxis_cfg["range"] = [y_lo, y_hi]
+
+    xaxis_cfg = dict(showgrid=False, zeroline=False)
+    if x_range is not None:
+        xaxis_cfg["range"] = x_range
+
     fig.update_layout(
         paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
         margin=dict(l=10, r=40, t=10, b=10),
         font=dict(color="#94a3b8"),
         legend=dict(orientation="h", y=1.05, bgcolor="rgba(0,0,0,0)"),
-        xaxis=dict(showgrid=False, zeroline=False),
-        yaxis=dict(showgrid=True, gridcolor="rgba(255,255,255,0.05)", zeroline=False, tickprefix=CURRENCY_RATES.get(currency, CURRENCY_RATES["USD"])["symbol"]),
+        xaxis=xaxis_cfg,
+        yaxis=yaxis_cfg,
         hovermode="x unified",
         hoverlabel=dict(bgcolor="#0a1020", bordercolor="#3b82f6", font=dict(color="white"))
     )
     
-    # Get LSTM metrics
+    # Métricas LSTM / WF desde el mismo payload que /predict (metrics + direction_accuracy)
     metrics = get_metrica(cripto)
-    
-    rmse_val = f"{metrics.get('rmse_lstm', 0):.4f}"
-    mae_val = f"{metrics.get('mae_lstm', 0):.4f}"
-    
-    # Si el MAPE viene como ratio (ej. 0.05), lo multiplicamos por 100
-    mape = metrics.get('mape_lstm', 0)
-    if 0 < mape < 1: mape *= 100
-    mape_val = f"{mape:.2f}%"
-    
-    dir_acc_val = f"{(metrics.get('accuracy_lstm', 0) * 100):.1f}%"
-    r2_val = f"{metrics.get('r2_lstm', 0):.3f}"
-    wf_val = f"{(metrics.get('accuracy_lstm', 0) * 100):.1f}% ±"
-    
-    # Get RL metrics
-    rl_metrics = get_trained_rl_metrics(cripto)
-    if rl_metrics:
-        sharpe_rl = rl_metrics["sharpe"]
-        sortino_rl = rl_metrics["sortino"]
-        max_dd_rl = rl_metrics["max_dd"]
-        win_rate_rl = rl_metrics["win_rate"]
-        pf_rl = rl_metrics["profit_factor"]
-        trades_rl = rl_metrics["trades"]
+    rmse_val = _fmt_api_float(metrics.get("rmse_lstm"), 2)
+    mae_val = _fmt_api_float(metrics.get("mae_lstm"), 2)
+    mape = metrics.get("mape_lstm", 0) or 0
+    try:
+        mape = float(mape)
+    except (TypeError, ValueError):
+        mape = 0.0
+    if 0 < abs(mape) < 1:
+        mape *= 100
+    mape_val = f"{mape:.4f}%"
+    dir_acc_val = _fmt_window_diracc(metrics.get("window_diracc"))
+
+    rl_metrics = get_trained_rl_metrics(cripto) or {}
+    sharpe_rl = _fmt_api_float(rl_metrics.get("sharpe"), 4)
+    total_ret = rl_metrics.get("total_return")
+    if total_ret is None:
+        total_return_rl = "—"
     else:
-        sharpe_rl = sortino_rl = max_dd_rl = win_rate_rl = pf_rl = trades_rl = "N/A"
+        try:
+            total_return_rl = f"{float(total_ret):.2f}%"
+        except (TypeError, ValueError):
+            total_return_rl = str(total_ret)
+    calmar_rl = _fmt_api_float(rl_metrics.get("calmar_ratio"), 2)
+    conf_rl = _fmt_rl_confidence(rl_metrics.get("confidence"))
+    agree_rl = _fmt_signal_agreement(rl_metrics.get("signal_agreement"))
+    raw_rl = _fmt_api_float(rl_metrics.get("raw_action"), 4)
     
-    # 5. La Franja Logic (Usa los valores reales de la API)
+    # 5. Franja visual: mismos límites que el cono del gráfico; marcador = predicción +4h
     rate = CURRENCY_RATES.get(currency, CURRENCY_RATES["USD"])["rate"]
     sym = CURRENCY_RATES.get(currency, CURRENCY_RATES["USD"])["symbol"]
-    
-    # Rango real de la API (La Franja)
-    f_min = preds.get("min")
-    f_max = preds.get("max")
-    
-    # Calcular posición porcentual del precio actual en ese rango futuro
-    if f_max > f_min:
-        pos_pct = (current_price - f_min) / (f_max - f_min)
+    span_bar = max(fmax_bar - fmin_bar, 1e-12)
+    pos_pct = (pred_4h - fmin_bar) / span_bar * 100.0
+    pos_pct = max(0.0, min(100.0, pos_pct))
+    if pos_pct > 82:
+        cercania_text = "Pred. +4h cerca del máx. del rango"
+    elif pos_pct < 18:
+        cercania_text = "Pred. +4h cerca del mín. del rango"
     else:
-        pos_pct = 0.5
-        
-    pos_pct = max(0, min(1, pos_pct)) * 100
-    
-    # Cercanía Label
-    if pos_pct > 80: cercania_text = "Cerca del Máximo"
-    elif pos_pct < 20: cercania_text = "Cerca del Mínimo"
-    else: cercania_text = "Zona Neutral"
-    
+        cercania_text = "Pred. +4h en zona intermedia"
+
     franja_ui = html.Div([
+        html.Div(cercania_text, style={
+            "fontSize": "11px", "fontWeight": "600", "color": "#94a3b8",
+            "textAlign": "center", "marginBottom": "12px", "letterSpacing": "0.02em",
+        }),
         html.Div([
-            html.Span(f"Proyección: {sym}{f_min*rate:,.0f}", style={"fontSize": "10px", "color": "#94a3b8"}),
-            html.Span(cercania_text, style={"fontSize": "11px", "fontWeight": "bold", "color": "#3b82f6", "textTransform": "uppercase"}),
-            html.Span(f"{sym}{f_max*rate:,.0f}", style={"fontSize": "10px", "color": "#94a3b8"}),
-        ], style={"display": "flex", "justifyContent": "space-between", "alignItems": "center", "marginBottom": "8px"}),
-        
+            html.Div([
+                html.Div("Mín (rango)", style={"fontSize": "10px", "color": "#64748b", "marginBottom": "4px"}),
+                html.Div(f"{sym}{fmin_bar * rate:,.0f}", style={"fontSize": "13px", "color": "#f87171", "fontWeight": "700"}),
+            ], style={"flex": "1", "textAlign": "left"}),
+            html.Div([
+                html.Div("Predicción +4h", style={"fontSize": "10px", "color": "#64748b", "marginBottom": "4px"}),
+                html.Div(format_price(pred_4h, currency), style={"fontSize": "15px", "color": "#fbbf24", "fontWeight": "800"}),
+            ], style={"flex": "1", "textAlign": "center"}),
+            html.Div([
+                html.Div("Máx (rango)", style={"fontSize": "10px", "color": "#64748b", "marginBottom": "4px"}),
+                html.Div(f"{sym}{fmax_bar * rate:,.0f}", style={"fontSize": "13px", "color": "#4ade80", "fontWeight": "700"}),
+            ], style={"flex": "1", "textAlign": "right"}),
+        ], style={"display": "flex", "justifyContent": "space-between", "alignItems": "flex-end", "marginBottom": "10px"}),
         html.Div([
-            # Track
             html.Div(style={
-                "height": "6px", "width": "100%", "background": "rgba(255,255,255,0.05)", 
-                "borderRadius": "3px", "position": "relative"
+                "height": "10px", "width": "100%",
+                "background": "linear-gradient(90deg, rgba(248,113,113,0.35) 0%, rgba(59,130,246,0.25) 50%, rgba(74,222,128,0.35) 100%)",
+                "borderRadius": "5px", "position": "relative", "border": "1px solid rgba(255,255,255,0.08)",
             }, children=[
-                # Fill (gradiente de confianza)
                 html.Div(style={
-                    "position": "absolute", "height": "100%", "left": "0", "width": f"{pos_pct}%",
-                    "background": "linear-gradient(90deg, #3b82f6, #10b981)",
-                    "borderRadius": "3px", "transition": "width 1s ease-in-out"
+                    "position": "absolute", "top": "-7px", "left": f"calc({pos_pct}% - 8px)", "width": "16px", "height": "16px",
+                    "background": "linear-gradient(145deg, #fff, #e2e8f0)", "borderRadius": "50%",
+                    "border": "2px solid #f59e0b", "boxShadow": "0 2px 12px rgba(0,0,0,0.35)",
+                    "transition": "left 0.6s ease-out", "zIndex": "3",
                 }),
-                # Marker
-                html.Div(style={
-                    "position": "absolute", "height": "14px", "width": "14px", "background": "white",
-                    "borderRadius": "50%", "top": "-4px", "left": f"calc({pos_pct}% - 7px)",
-                    "boxShadow": "0 0 10px rgba(59,130,246,0.8)", "border": "2px solid #3b82f6",
-                    "transition": "left 1s ease-in-out"
-                })
-            ])
-        ], style={"padding": "5px 0"}),
-        
+            ]),
+        ], style={"padding": "4px 0 8px 0"}),
         html.Div([
-            html.Span("Mín proyectado (4h)", style={"fontSize": "9px", "color": "#475569"}),
-            html.Span("Máx proyectado (4h)", style={"fontSize": "9px", "color": "#475569"}),
-        ], style={"display": "flex", "justifyContent": "space-between", "marginTop": "4px"})
-    ])
+            html.Span("0%", style={"fontSize": "9px", "color": "#475569"}),
+            html.Span("posición de +4h en el rango API (alineado con el cono)", style={"fontSize": "9px", "color": "#475569", "fontStyle": "italic"}),
+            html.Span("100%", style={"fontSize": "9px", "color": "#475569"}),
+        ], style={"display": "flex", "justifyContent": "space-between", "marginTop": "2px"}),
+    ], style={"marginTop": "8px"})
 
     return (
         title_str, format_price(current_price, currency), change_str, change_style, fig, pred_ui, rl_ui, 
-        rmse_val, mae_val, mape_val, dir_acc_val, r2_val, wf_val,
-        sharpe_rl, sortino_rl, max_dd_rl, win_rate_rl, pf_rl, trades_rl,
+        rmse_val, mae_val, mape_val, dir_acc_val,
+        sharpe_rl, total_return_rl, calmar_rl, conf_rl, agree_rl, raw_rl,
         franja_ui
     )
