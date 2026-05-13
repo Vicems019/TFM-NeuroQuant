@@ -11,8 +11,7 @@ from pages.mock_data import (
 )
 from pages.currency_utils import format_price, CURRENCY_RATES
 
-from pages.api_client import get_predicciones_lstm_real, get_decision_rl
-from pages.db_utils import get_trades
+from database.db_utils import get_trades, get_last_operations
 os.environ["TF_ENABLE_ONEDNN_OPTS"] = "0"
 dash.register_page(__name__, path="/", name="Visión General")
 CRIPTOS    = ["ALL", "BTC", "ETH", "SOL", "AVAX"]
@@ -107,6 +106,20 @@ modal = html.Div([
 # ── LAYOUT ────────────────────────────────────────────────────────────────────
 layout = html.Div([
     modal,
+    # Cabecera: saludo + ajustes
+    html.Div([
+        html.Div([
+            html.Div(id="overview-greeting", className="overview-greeting"),
+            html.Div("Aquí tienes el resumen del mercado", className="overview-greeting-sub"),
+        ]),
+        dcc.Link(
+            html.Button([
+                html.Span("⚙", style={"marginRight": "6px"}),
+                "Ajustes",
+            ], className="btn-settings-overview"),
+            href="/settings",
+        ),
+    ], className="overview-header-row"),
     # Selector ALL | BTC | ETH | SOL | AVAX
     html.Div([
         *[html.Button(c, id={"type": "btn-cripto", "index": c},
@@ -156,6 +169,22 @@ layout = html.Div([
     ], className="bottom-row"),
 ], className="page-container")
 # ── CALLBACKS ─────────────────────────────────────────────────────────────────
+@callback(
+    Output("overview-greeting", "children"),
+    Input("auth-token", "data"),
+)
+def actualizar_saludo(auth):
+    from datetime import datetime
+    hora = datetime.now().hour
+    if hora < 12:
+        saludo = "Buenos días"
+    elif hora < 20:
+        saludo = "Buenas tardes"
+    else:
+        saludo = "Buenas noches"
+    nombre = auth if auth else "Trader"
+    return f"{saludo}, {nombre} 👋"
+
 @callback(
     Output({"type": "btn-cripto", "index": dash.ALL}, "className"),
     Input("store-cripto", "data"),

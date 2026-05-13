@@ -1,8 +1,7 @@
 import dash
 from dash import html, dcc, callback, Input, Output, State
 import plotly.graph_objects as go
-from pages.db_utils import get_balance, add_trade, get_trades
-from pages.api_client import get_predicciones_lstm_real
+from database.db_utils import get_trades
 from pages.currency_utils import format_price
 
 dash.register_page(__name__, path="/paper-trading", name="Paper Trading")
