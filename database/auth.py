@@ -21,7 +21,7 @@ def register_user(username, password, email=""):
     try:
 
         cursor.execute("""
-        INSERT INTO usuarios (username, password_hash, email)
+        INSERT INTO usuarios (username, password, email)
         VALUES (?, ?, ?)
         """, (username, password_hash, email))
         conn.commit()
@@ -40,7 +40,7 @@ def login_user(username, password):
     cursor = conn.cursor()
 
     cursor.execute("""
-    SELECT password_hash
+    SELECT password
     FROM usuarios
     WHERE username = ?
     """, (username,))

@@ -15,13 +15,12 @@ def _conn():
 def get_saldo_cash(username: str) -> float:
     with _conn() as conn:
         row = conn.execute(
-            "SELECT saldo_cash FROM usuarios WHERE username = ?", (username,)
+            "SELECT saldo FROM usuarios WHERE username = ?", (username,)
         ).fetchone()
-    return float(row["saldo_cash"]) if row else 100_000.0
+    return float(row["saldo"]) if row else 100_000.0
 
 
 def get_criptomonedas() -> list[dict]:
-    """Devuelve todas las cryptos disponibles (id, nombre, symbol)."""
     with _conn() as conn:
         rows = conn.execute(
             "SELECT id, nombre, symbol FROM criptomonedas ORDER BY nombre"
@@ -30,10 +29,6 @@ def get_criptomonedas() -> list[dict]:
 
 
 def get_posiciones(username: str) -> list[dict]:
-    """
-    Posiciones abiertas: qty neta > 0 por cripto.
-    Incluye precio medio de compra para calcular PnL en la UI.
-    """
     with _conn() as conn:
         rows = conn.execute("""
             SELECT
@@ -54,14 +49,12 @@ def get_posiciones(username: str) -> list[dict]:
     results = []
     for r in rows:
         d = dict(r)
-        # Precio medio ponderado de las compras
         d["precio_medio"] = d["coste_total"] / d["qty_buy"] if d["qty_buy"] else 0.0
         results.append(d)
     return results
 
 
 def get_historial(username: str, limit: int = 30) -> list[dict]:
-    """Últimas `limit` operaciones del usuario, más reciente primero."""
     with _conn() as conn:
         rows = conn.execute("""
             SELECT
@@ -84,10 +77,6 @@ def get_historial(username: str, limit: int = 30) -> list[dict]:
 
 
 def get_resumen_portfolio(username: str) -> dict:
-    """
-    Coste total invertido (en posiciones abiertas) y cash disponible.
-    La UI añade el precio actual para obtener el valor de mercado.
-    """
     cash = get_saldo_cash(username)
     posiciones = get_posiciones(username)
     coste_invertido = sum(p["precio_medio"] * p["qty_net"] for p in posiciones)
@@ -97,19 +86,12 @@ def get_resumen_portfolio(username: str) -> dict:
         "capital_total_en_coste": cash + coste_invertido,
     }
 
-
-# ── Operaciones de escritura ──────────────────────────────────────────────────
-
 def ejecutar_compra(
     username: str,
     crypto_symbol: str,
     cantidad: float,
     precio_actual: float,
 ) -> tuple[bool, str]:
-    """
-    Registra una compra y descuenta el coste del saldo_cash del usuario.
-    Devuelve (éxito, mensaje).
-    """
     coste = cantidad * precio_actual
     with _conn() as conn:
         user = conn.execute(
@@ -151,11 +133,6 @@ def ejecutar_venta(
     cantidad: float,
     precio_actual: float,
 ) -> tuple[bool, str]:
-    """
-    Registra una venta y suma el ingreso al saldo_cash del usuario.
-    Verifica que el usuario tenga posición suficiente.
-    Devuelve (éxito, mensaje).
-    """
     with _conn() as conn:
         user = conn.execute(
             "SELECT id FROM usuarios WHERE username = ?", (username,)
@@ -169,7 +146,6 @@ def ejecutar_venta(
         if not crypto:
             return False, f"Criptomoneda '{crypto_symbol}' no encontrada en la BD."
 
-        # Posición neta actual
         pos = conn.execute("""
             SELECT
                 SUM(CASE WHEN tipo = 'BUY'  THEN cantidad ELSE 0 END) -
@@ -199,3 +175,4 @@ def ejecutar_venta(
         conn.commit()
 
     return True, f"✅ Venta ejecutada: {cantidad:.6f} {crypto_symbol} a ${precio_actual:,.2f}"
+

@@ -9,8 +9,9 @@ def create_database():
             CREATE TABLE IF NOT EXISTS usuarios (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 username TEXT UNIQUE NOT NULL,
-                password_hash TEXT NOT NULL,
-                saldo_cash REAL NOT NULL DEFAULT 10000.0,
+                password TEXT NOT NULL,
+                email TEXT UNIQUE NOT NULL,
+                saldo REAL NOT NULL DEFAULT 10000.0,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             );
             CREATE TABLE IF NOT EXISTS operaciones (

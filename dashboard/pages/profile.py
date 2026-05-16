@@ -15,102 +15,128 @@ def _row(label, value_el):
     ], className="profile-bigcard-row")
 
 
+
+# --- Modern Card-based Profile Layout ---
 layout = html.Div([
     html.Div([
-        # Tarjeta principal (estilo manual tipo pnl-stat-card / panel)
         html.Div([
+            # Hero Card
+            html.Div([
+                html.Div("NQ", className="profile-avatar-wrap", style={"fontSize": "2.2rem", "fontWeight": "bold"}),
+                html.Div([
+                    html.Div(id="profile-display-name", className="profile-hero-name"),
+                    html.Div("Trader · NeuroQuant AI", className="profile-hero-role"),
+                    html.Div([
+                        html.Span("●", style={"color": "#10b981", "fontSize": "1.1em", "marginRight": "6px"}),
+                        html.Span("Cuenta activa", className="profile-status-text"),
+                    ], className="profile-status-badge"),
+                ], className="profile-hero-info"),
+            ], className="profile-hero-card"),
+
+            # KPIs
             html.Div([
                 html.Div([
-                    html.Div("NQ", className="profile-bigcard-avatar"),
-                ], className="profile-bigcard-avatar-wrap"),
+                    html.Div("📄", className="kpi-icon"),
+                    html.Div(id="kpi-operaciones", className="kpi-val"),
+                    html.Div("Operaciones", className="kpi-label"),
+                ], className="kpi-card"),
                 html.Div([
-                    html.Div(id="profile-display-name", className="profile-bigcard-title"),
-                    html.Div("Trader · NeuroQuant AI", className="profile-bigcard-sub"),
-                    html.Div("Cuenta activa", className="profile-bigcard-badge"),
-                    html.Button("Cerrar sesión", id="btn-logout", className="btn-logout", n_clicks=0),
-                ], className="profile-bigcard-head-text"),
-            ], className="profile-bigcard-header"),
+                    html.Div("💰", className="kpi-icon"),
+                    html.Div(id="kpi-pnl", className="kpi-val"),
+                    html.Div("P&L total", className="kpi-label"),
+                ], className="kpi-card"),
+                html.Div([
+                    html.Div("🏆", className="kpi-icon"),
+                    html.Div(id="kpi-winrate", className="kpi-val"),
+                    html.Div("Win rate", className="kpi-label"),
+                ], className="kpi-card"),
+                html.Div([
+                    html.Div("💵", className="kpi-icon"),
+                    html.Div(id="profile-balance", className="kpi-val"),
+                    html.Div("Balance (papertrade)", className="kpi-label"),
+                    html.Div(id="profile-balance-upd", className="profile-kpi-mini-label", style={"marginTop": "2px"}),
+                ], className="kpi-card"),
+            ], className="profile-kpis-grid", style={"margin": "32px 0 18px 0"}),
 
-            html.Div([
-                html.Div(className="profile-asset-card", children=[
-                    html.Div("Activo", className="asset-card-label"),
-                    html.Div(id="profile-balance", className="asset-card-value"),
-                    html.Div(id="profile-balance-upd", className="asset-card-sub"),
-                ])
-            ]),
-
-            html.Div(className="profile-bigcard-divider"),
+            # Info Panels
             html.Div([
                 html.Div([
-                    html.Div("Operaciones", className="profile-kpi-mini-label"),
-                    html.Div(id="kpi-operaciones", className="profile-kpi-mini-val"),
-                ], className="profile-kpi-mini"),
+                    html.Div([
+                        html.Div("Datos de cuenta", className="panel-title", style={"marginBottom": "10px"}),
+                        html.Div([
+                            html.Div([
+                                html.Span("Correo", className="info-label"),
+                                html.Span("usuario@tfm.es", className="info-val"),
+                            ], className="info-row"),
+                            html.Div([
+                                html.Span("Plan", className="info-label"),
+                                html.Span("NeuroQuant Pro", className="info-val", style={"color": "#10b981"}),
+                            ], className="info-row"),
+                            html.Div([
+                                html.Span("Activo desde", className="info-label"),
+                                html.Span(id="profile-activo-desde", className="info-val"),
+                            ], className="info-row"),
+                        ], className="info-table"),
+                    ], className="profile-panel", style={"background": "var(--bg-card2)", "boxShadow": "0 2px 12px rgba(59,130,246,0.08)", "marginBottom": "28px", "marginRight": "16px", "padding": "28px 32px 32px"}),
+                ]),
                 html.Div([
-                    html.Div("P&L total", className="profile-kpi-mini-label"),
-                    html.Div(id="kpi-pnl", className="profile-kpi-mini-val"),
-                ], className="profile-kpi-mini"),
-                html.Div([
-                    html.Div("Win rate", className="profile-kpi-mini-label"),
-                    html.Div(id="kpi-winrate", className="profile-kpi-mini-val"),
-                ], className="profile-kpi-mini"),
-            ], className="profile-kpi-mini-row"),
+                    html.Div("Modelo e inferencia", className="panel-title", style={"marginBottom": "10px"}),
+                    html.Div([
+                        html.Div([
+                            html.Span("Modelo activo", className="info-label"),
+                            html.Span("LSTM + RL PPO v2.1", className="info-val"),
+                        ], className="info-row"),
+                        html.Div([
+                            html.Span("Mercados", className="info-label"),
+                            html.Span("BTC · ETH · SOL · AVAX", className="info-val"),
+                        ], className="info-row"),
+                        html.Div([
+                            html.Span("Actualización", className="info-label"),
+                            html.Span("Cada 5 minutos · última sync hace ~2 min", className="info-val"),
+                        ], className="info-row"),
+                    ], className="info-table"),
+                ], className="profile-panel", style={"marginBottom": "28px"}),
+            ], className="profile-panels-row", style={"margin": "28px 0 0 0", "gap": "32px"}),
 
-            html.Div(className="profile-bigcard-divider"),
-
+            # Danger Zone (Red Card, larger, popup confirmation)
             html.Div([
-                html.Div("Datos de cuenta", className="profile-bigcard-section-title"),
-                _row("Correo", html.Span("usuario@tfm.es", className="profile-bigcard-val-static")),
-                _row("Plan", html.Span("NeuroQuant Pro", className="profile-bigcard-val-static green")),
-                _row("Activo desde", html.Span(id="profile-activo-desde", className="profile-bigcard-val-static")),
-            ], className="profile-bigcard-block"),
-
-            html.Div([
-                html.Div("Modelo e inferencia", className="profile-bigcard-section-title"),
-                _row("Modelo activo", html.Span("LSTM + RL PPO v2.1", className="profile-bigcard-val-static")),
-                _row("Mercados", html.Span("BTC · ETH · SOL · AVAX", className="profile-bigcard-val-static")),
-                _row("Actualización", html.Span("Cada 5 minutos · última sync hace ~2 min", className="profile-bigcard-val-static")),
-            ], className="profile-bigcard-block"),
-
-            html.Div(className="profile-bigcard-divider"),
-
-            html.Div([
-                html.Div("Zona de riesgo", className="profile-danger-title"),
+                html.Div("Zona de riesgo", className="profile-danger-title", style={"fontSize": "1.1rem", "marginBottom": "10px"}),
                 html.P(
-                    "Eliminar la sesión en el panel. Si en el futuro hubiera cuenta persistente, "
-                    "aquí se daría de baja definitivamente.",
+                    "Eliminar la sesión en el panel. Si en el futuro hubiera cuenta persistente, aquí se daría de baja definitivamente.",
                     className="profile-danger-copy",
                 ),
                 html.Div([
-                    html.Div(id="wrap-del-start", style={"display": "block"}, children=[
-                        html.Button(
-                            "Darse de baja de la cuenta",
-                            id="btn-del-start",
-                            className="btn-account-delete",
-                            n_clicks=0,
-                        ),
-                    ]),
-                    html.Div(id="wrap-del-1", style={"display": "none"}, children=[
-                        html.P("¿Estás seguro?", className="profile-danger-question"),
-                        html.Div([
-                            html.Button("Sí, continuar", id="btn-del-1-yes", className="btn-del-secondary", n_clicks=0),
-                            html.Button("Cancelar", id="btn-del-1-no", className="btn-del-cancel", n_clicks=0),
-                        ], className="profile-danger-actions"),
-                    ]),
-                    html.Div(id="wrap-del-2", style={"display": "none"}, children=[
-                        html.P(
-                            "¿Estás seguro de la decisión? Esta acción cerrará tu sesión en el dashboard.",
-                            className="profile-danger-question",
-                        ),
-                        html.Div([
-                            html.Button("Sí, eliminar sesión", id="btn-del-2-yes", className="btn-account-delete", n_clicks=0),
-                            html.Button("Cancelar", id="btn-del-2-no", className="btn-del-cancel", n_clicks=0),
-                        ], className="profile-danger-actions"),
-                    ]),
-                ], className="profile-danger-stack"),
-            ], className="profile-danger-zone"),
-
-        ], className="profile-bigcard"),
-
+                    html.Button(
+                        "Eliminar cuenta",
+                        id="btn-del-popup",
+                        className="btn-account-delete",
+                        n_clicks=0,
+                        style={
+                            "width": "100%",
+                            "fontSize": "1.1rem",
+                            "padding": "16px 0",
+                            "marginTop": "10px",
+                            "background": "linear-gradient(90deg, #ef4444, #b91c1c)",
+                            "color": "#fff",
+                            "border": "none",
+                            "fontWeight": "700",
+                            "fontSize": "15px",
+                            "borderRadius": "10px",
+                            "boxShadow": "0 2px 12px rgba(239,68,68,0.18)"
+                        }
+                    ),
+                ], style={"marginTop": "18px"}),
+                dcc.ConfirmDialog(
+                    id="confirm-del-1",
+                    message="¿Estás seguro de que quieres cerrar tu cuenta? Esta acción es irreversible.",
+                ),
+                dcc.ConfirmDialog(
+                    id="confirm-del-2",
+                    message="¿Seguro que quieres cerrar tu cuenta? Se cerrará tu sesión y se eliminarán tus datos de sesión.",
+                ),
+                html.Button("Cerrar sesión", id="btn-logout", className="btn-logout btn-logout-amber", n_clicks=0, style={"marginTop": "32px", "background": "linear-gradient(90deg, #f59e0b, #fbbf24)", "color": "#fff", "border": "none", "fontWeight": "700", "fontSize": "15px", "borderRadius": "10px", "padding": "14px 0", "width": "100%", "boxShadow": "0 2px 12px rgba(245,158,11,0.18)"}),
+            ], className="profile-danger-zone", style={"marginTop": "40px", "background": "linear-gradient(120deg, #ef4444 0%, #b91c1c 100%)", "border": "1.5px solid #ef4444", "boxShadow": "0 2px 16px rgba(239,68,68,0.13)", "padding": "36px 32px"}),
+        ], className="profile-content"),
     ], className="profile-page-inner"),
 ], className="page-container")
 
@@ -178,37 +204,38 @@ def populate_profile(auth):
     return nombre, str(total), pnl_str, f"{winrate:.1f}%", activo_desde, balance_str, last_upd_str
 
 
+# --- Popup confirmation for account deletion ---
+from dash import ctx
+
 @callback(
-    Output("wrap-del-start", "style"),
-    Output("wrap-del-1", "style"),
-    Output("wrap-del-2", "style"),
-    Output("auth-token", "data", allow_duplicate=True),
-    Output("global-url", "pathname", allow_duplicate=True),
-    Input("btn-del-start", "n_clicks"),
-    Input("btn-del-1-yes", "n_clicks"),
-    Input("btn-del-1-no", "n_clicks"),
-    Input("btn-del-2-yes", "n_clicks"),
-    Input("btn-del-2-no", "n_clicks"),
+    Output("confirm-del-1", "displayed"),
+    Input("btn-del-popup", "n_clicks"),
     prevent_initial_call=True,
 )
-def account_delete_flow(ns, n1y, n1n, n2y, n2n):
-    ctx = dash.callback_context
-    if not ctx.triggered:
-        raise PreventUpdate
-    tid = ctx.triggered_id
-    blk = {"display": "block"}
-    non = {"display": "none"}
+def show_first_confirm(n):
+    if n:
+        return True
+    raise PreventUpdate
 
-    if tid == "btn-del-start":
-        return non, blk, non, dash.no_update, dash.no_update
-    if tid == "btn-del-1-no":
-        return blk, non, non, dash.no_update, dash.no_update
-    if tid == "btn-del-1-yes":
-        return non, non, blk, dash.no_update, dash.no_update
-    if tid == "btn-del-2-no":
-        return blk, non, non, dash.no_update, dash.no_update
-    if tid == "btn-del-2-yes":
-        return blk, non, non, None, "/login"
+@callback(
+    Output("confirm-del-2", "displayed"),
+    Input("confirm-del-1", "submit_n_clicks"),
+    prevent_initial_call=True,
+)
+def show_second_confirm(n):
+    if n:
+        return True
+    raise PreventUpdate
+
+@callback(
+    Output("auth-token", "data", allow_duplicate=True),
+    Output("global-url", "pathname", allow_duplicate=True),
+    Input("confirm-del-2", "submit_n_clicks"),
+    prevent_initial_call=True,
+)
+def handle_final_delete(n):
+    if n:
+        return None, "/login"
     raise PreventUpdate
 
 

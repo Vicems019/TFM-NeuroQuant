@@ -80,7 +80,7 @@ sidebar = html.Div([
     html.Div([
         html.Div("📊  ANÁLISIS", className="sidebar-section-label"),
         dcc.Link(html.Div(["◈ ", html.Span("Visión General")],  className="sidebar-item"), href="/home"),
-        dcc.Link(html.Div(["📈 ", html.Span("Paper Trading")], className="sidebar-item"), href="/paper-trading"),
+        dcc.Link(html.Div(["📈 ", html.Span("Paper Trading")], className="sidebar-item"), href="/papertrade"),
     ], className="sidebar-section"),
     # Section 2
     html.Div([
