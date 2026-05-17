@@ -3,3 +3,6 @@ updater.py
 .kaggle/
 settings.json
 *.csv
+*.pyc
+*.sqlite
+*.sqlite3
