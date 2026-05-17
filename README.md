@@ -49,23 +49,23 @@ La interfaz de usuario es una aplicación web local construida con **Dash Plotly
 ## Autenticación
 
 ### Inicio de sesión
-![Login](docs/images/login.png)
+![Login](docs/images/login.PNG)
 
 ### Registro
-![Register](docs/images/register.png)
+![Register](docs/images/register.PNG)
 
 ---
 
 ## Panel principal
 
 ### Dashboard
-![Dashboard](docs/images/dashboard.png)
+![Dashboard](docs/images/dashboard.PNG)
 
 ---
 
 ## Panel lateral
 
-![Sidebar](docs/images/panel_lateral.png)
+![Sidebar](docs/images/panel_lateral.PNG)
 
 
 ---
@@ -73,7 +73,7 @@ La interfaz de usuario es una aplicación web local construida con **Dash Plotly
 ## Paper Trade
 
 ### Simulación de operaciones
-![Paper Trade](docs/images/papertrade.png)
+![Paper Trade](docs/images/papertrade.PNG)
 
 ---
 
