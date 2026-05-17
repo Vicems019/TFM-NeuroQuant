@@ -41,7 +41,8 @@ def _prepare_X_input(coin: str) -> list:
     
     if os.path.exists(preproc_path):
         df = pd.read_csv(preproc_path)
-        df['timestamp'] = pd.to_datetime(df['timestamp'])
+        df['timestamp'] = pd.to_datetime(df['timestamp'], format='mixed', dayfirst=False, utc=True)
+        df = df.dropna(subset=['timestamp'])  # elimina las filas con fechas corruptas
         df = df.sort_values('timestamp').reset_index(drop=True)
     else:
         logger.warning(f"⚠️ No se encontró datos preprocesados para {coin}. Procesando desde raw...")
@@ -107,6 +108,8 @@ def _call_predict(coin: str) -> dict:
         return _CACHE[coin]
 
     X_input = _prepare_X_input(coin)
+
+    print("DEBUG X_input", X_input)
     if X_input is None:
         return {}
 

@@ -31,20 +31,15 @@ def init_db():
     conn.commit()
     conn.close()
 
-def get_balance():
+def get_balance(nombre):
+    print(f"DEBUG: Obteniendo balance para el usuario '{nombre}'")
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
-    cursor.execute('SELECT balance FROM portfolio ORDER BY id DESC LIMIT 1')
+    cursor.execute('SELECT saldo FROM usuarios WHERE username = ?', (nombre,))
     res = cursor.fetchone()
+    print("DEBUG: Balance obtenido de DB:", res[0] if res else "No encontrado")
     conn.close()
     return res[0] if res else 100000.0
-
-def update_balance(new_balance):
-    conn = sqlite3.connect(DB_NAME)
-    cursor = conn.cursor()
-    cursor.execute('UPDATE portfolio SET balance = ?', (new_balance,))
-    conn.commit()
-    conn.close()
 
 def get_last_operations(user_id: int, limit: int = 20):
     conn = sqlite3.connect(DB_NAME)

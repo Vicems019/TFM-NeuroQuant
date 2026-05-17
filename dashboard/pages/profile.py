@@ -7,15 +7,6 @@ from datetime import datetime
 
 dash.register_page(__name__, path="/profile", name="Perfil")
 
-
-def _row(label, value_el):
-    return html.Div([
-        html.Span(label, className="profile-bigcard-label"),
-        html.Div(value_el, className="profile-bigcard-value"),
-    ], className="profile-bigcard-row")
-
-
-
 # --- Modern Card-based Profile Layout ---
 layout = html.Div([
     html.Div([
@@ -188,7 +179,8 @@ def populate_profile(auth):
 
     # Obtener balance
     try:
-        balance = get_balance()
+        print("DEBUG: Obteniendo balance para usuario:", nombre)
+        balance = get_balance(nombre)
         balance_str = f"${balance:,.2f}"
     except Exception:
         balance_str = "-"

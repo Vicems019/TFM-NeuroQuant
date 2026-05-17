@@ -98,18 +98,19 @@ layout = html.Div([
                 # Cantidad
                 html.Div([
                     html.Label("Cantidad (unidades de cripto)", style={"color": "#94a3b8", "fontSize": "12px", "marginBottom": "6px"}),
-                    dcc.Input(
-                        id="pt-cantidad",
-                        type="number",
-                        min=0.000001,
-                        step=0.0001,
-                        placeholder="Ej: 0.05",
-                        style={
-                            "width": "100%", "background": "#0c1428", "color": "white",
-                            "border": "1px solid rgba(59,130,246,0.3)", "borderRadius": "8px",
-                            "padding": "10px 14px", "fontSize": "15px",
-                        },
-                    ),
+                        dcc.Input(
+                            id="pt-cantidad",
+                            type="number",
+                            min=0.01,
+                            step=0.01,
+                            value=0.01,
+                            placeholder="Ej: 0.05",
+                            style={
+                                "width": "100%", "background": "#0c1428", "color": "white",
+                                "border": "1px solid rgba(59,130,246,0.3)", "borderRadius": "8px",
+                                "padding": "10px 14px", "fontSize": "15px",
+                            },
+                        ),
                 ], style={"marginBottom": "16px"}),
 
                 # Precio actual (informativo)
@@ -237,7 +238,7 @@ def ejecutar_y_refrescar(n_clicks, _, symbol, cantidad, tipo, username, currency
     currency = currency or "USD"
     rate     = CURRENCY_RATES.get(currency, CURRENCY_RATES["USD"])["rate"]
     sym_cur  = CURRENCY_RATES.get(currency, CURRENCY_RATES["USD"])["symbol"]
-
+    
     # ── Ejecutar operación si viene del botón ─────────────────────────────────
     if ctx.triggered and "pt-btn-ejecutar" in ctx.triggered[0]["prop_id"]:
         if not username:
@@ -314,7 +315,7 @@ def ejecutar_y_refrescar(n_clicks, _, symbol, cantidad, tipo, username, currency
                 # Cantidad neta
                 html.Div([
                     html.Div("Cantidad", style={"fontSize": "10px", "color": "#64748b"}),
-                    html.Div(f"{pos['qty_net']:.6f}", style={"fontSize": "13px", "color": "#e2e8f0"}),
+                    html.Div(f"{pos['qty_net']:.3f}", style={"fontSize": "13px", "color": "#e2e8f0"}),
                 ], style={"flex": "1", "textAlign": "right"}),
                 # Precio medio compra
                 html.Div([

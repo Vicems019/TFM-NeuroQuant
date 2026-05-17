@@ -22,14 +22,21 @@ CARD_COINS = ["BTC", "ETH", "SOL"]
 PERIODO_LABEL = {"1d": "Diaria", "7d": "Semanal", "1m": "Mensual"}
 # Se usa format_price importado de lstm_utils
 def _mini_chart(coin):
-    df    = get_historico(coin, 72)
-    if df.empty: return go.Figure()
+    df = get_historico(coin, 24)
+    if df.empty or len(df) < 2:
+        return go.Figure()
     close = df["close"].tolist()
-    up    = close[-1] >= close[0]
-    color = "#10b981" if up else "#ef4444"
-    fill  = "rgba(16,185,129,0.12)" if up else "rgba(239,68,68,0.10)"
-    fig   = go.Figure(go.Scatter(x=df.index, y=close, fill="tozeroy", fillcolor=fill,
-                                  line=dict(color=color, width=2.0, shape="spline"), hoverinfo="skip"))
+    preds = get_predicciones_lstm_real(coin)
+    p = preds.get("precio_actual", 0)
+    # Usar precio actual como último punto si es válido
+    if p and abs(p - close[-1]) > 1e-6:
+        close = close[:-1] + [p]
+    # Calcular variación diaria (badge)
+    c = ((close[-1] - close[0]) / close[0]) * 100 if close[0] != 0 else 0
+    color = "#10b981" if c >= 0 else "#ef4444"
+    fill  = "rgba(16,185,129,0.12)" if c >= 0 else "rgba(239,68,68,0.10)"
+    fig = go.Figure(go.Scatter(x=list(range(len(close))), y=close, fill="tozeroy", fillcolor=fill,
+                               line=dict(color=color, width=2.0, shape="spline"), hoverinfo="skip"))
     fig.update_layout(
         paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
         margin=dict(l=0, r=0, t=0, b=0), showlegend=False,

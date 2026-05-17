@@ -95,15 +95,15 @@ def ejecutar_compra(
     coste = cantidad * precio_actual
     with _conn() as conn:
         user = conn.execute(
-            "SELECT id, saldo_cash FROM usuarios WHERE username = ?", (username,)
+            "SELECT id, saldo FROM usuarios WHERE username = ?", (username,)
         ).fetchone()
         if not user:
             return False, "Usuario no encontrado."
 
-        if float(user["saldo_cash"]) < coste:
+        if float(user["saldo"]) < coste:
             return False, (
                 f"Saldo insuficiente. "
-                f"Disponible: ${user['saldo_cash']:,.2f} | "
+                f"Disponible: ${user['saldo']:,.2f} | "
                 f"Necesario: ${coste:,.2f}"
             )
 
@@ -119,7 +119,7 @@ def ejecutar_compra(
             (user["id"], crypto["id"], cantidad, precio_actual),
         )
         conn.execute(
-            "UPDATE usuarios SET saldo_cash = saldo_cash - ? WHERE id = ?",
+            "UPDATE usuarios SET saldo = saldo - ? WHERE id = ?",
             (coste, user["id"]),
         )
         conn.commit()
@@ -169,7 +169,7 @@ def ejecutar_venta(
             (user["id"], crypto["id"], cantidad, precio_actual),
         )
         conn.execute(
-            "UPDATE usuarios SET saldo_cash = saldo_cash + ? WHERE id = ?",
+            "UPDATE usuarios SET saldo = saldo + ? WHERE id = ?",
             (ingreso, user["id"]),
         )
         conn.commit()

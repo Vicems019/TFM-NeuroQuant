@@ -377,6 +377,9 @@ def process_all_preprocessed(force=False):
         df_1d = pd.read_csv(p1d, parse_dates=["timestamp"])
 
         for d in [df_1h, df_4h, df_1d]:
+            d["timestamp"] = pd.to_datetime(d["timestamp"], format='mixed', utc=False)
+
+        for d in [df_1h, df_4h, df_1d]:
             if d["timestamp"].dt.tz is None:
                 d["timestamp"] = d["timestamp"].dt.tz_localize("UTC")
 

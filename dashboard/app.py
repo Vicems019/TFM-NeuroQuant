@@ -1,6 +1,9 @@
 import os
 import sys
 import requests
+import threading
+import time
+from datetime import datetime
 import json
 # Solución para el error OMP #15 en Windows
 os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
@@ -17,6 +20,7 @@ from dash import Dash, html, dcc, Input, Output, State, callback
 from core.cache_config import setup_cache, cache
 # El procesamiento local se ha movido a la nube (ngrok)
 from pages.api_client import _prepare_X_input, preload_all_data
+from data.update_data import update_local, process_all_preprocessed
 
 
 
@@ -27,7 +31,24 @@ logger = logging.getLogger(__name__)
 import diskcache
 cache_obj = diskcache.Cache("./cache_dir")
 
+def _run_periodic_update():
+    process_all_preprocessed()
+
+    def _esperar_hasta_siguiente_hh01():
+        ahora = datetime.now()
+        segundos = (61 - ahora.minute) * 60 - ahora.second
+        if ahora.minute == 1 and ahora.second < 60:
+            segundos = 0
+        time.sleep(segundos)
+
+    _esperar_hasta_siguiente_hh01()
+    while True:
+        update_local()
+        process_all_preprocessed(force=True)
+        _esperar_hasta_siguiente_hh01()
+
 # Inicializar precarga de datos
+threading.Thread(target=_run_periodic_update, daemon=True).start()
 preload_all_data()
 
 app = Dash(
@@ -61,14 +82,14 @@ topbar = html.Div([
         ], className="logo-text"),
     ], className="topbar-left"),
     html.Div([
-        dcc.Link(
-            html.Button("⚙", id="btn-settings", className="icon-btn", title="Ajustes"),
-            href="/settings"
-        ),
         html.Div(id="topbar-user-name", style={"fontWeight": "600", "color": "var(--text-primary)", "fontSize": "13px", "marginRight": "12px"}),
         dcc.Link(
             html.Button("👤", id="btn-profile", className="icon-btn icon-btn-profile", title="Perfil"),
             href="/profile"
+        ),
+        dcc.Link(
+            html.Button("⚙", id="btn-settings", className="icon-btn", title="Ajustes"),
+            href="/settings"
         ),
     ], className="topbar-right"),
 ], className="topbar")

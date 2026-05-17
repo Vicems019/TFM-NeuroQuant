@@ -123,12 +123,14 @@ def load_historical_data(coin="BTC"):
         df = pd.read_csv(path)
         if 'timestamp' in df.columns:
             df['timestamp'] = pd.to_datetime(df['timestamp'])
+            df = df.dropna(subset=['timestamp'])
+            df = df.sort_values('timestamp').reset_index(drop=True)
             # Convertir a horario de Madrid para visualización
             if df['timestamp'].dt.tz is None:
                 df['timestamp'] = df['timestamp'].dt.tz_localize("UTC")
             df['timestamp'] = df['timestamp'].dt.tz_convert("Europe/Madrid")
             df = df.sort_values("timestamp")
-            return df.tail(24 * 30) # last 30 days
+            return df.tail(24 * 30)
     return pd.DataFrame()
 
 # ── MODAL INFO ──────────────────────────────────────────────
@@ -186,12 +188,6 @@ modal_metrics = html.Div([
                     html.Div([html.Span("Acuerdo señales", style={"fontWeight": "bold"}), html.Div(id="signal-agreement-rl", className="pnl-val green"), html.Span("Coherencia entre señales", className="modal-hint")], className="pnl-stat-card"),
                     html.Div([html.Span("Acción raw", style={"fontWeight": "bold"}), html.Div(id="raw-action-rl", className="pnl-val"), html.Span("Salida continua del agente", className="modal-hint")], className="pnl-stat-card"),
                 ], style={"display": "grid", "gridTemplateColumns": "repeat(2, 1fr)", "gap": "10px"}),
-                
-                # Chart below metrics
-                html.Div([
-                    html.Div("Ilustrativo: la curva no forma parte del JSON del API (métricas arriba sí)", style={"fontSize": "11px", "color": "#64748b", "marginBottom": "5px", "marginTop": "10px"}),
-                    dcc.Graph(id="chart-rl-metrics", config={"displayModeBar": False}, style={"height": "250px", "background": "transparent", "borderRadius": "8px"})
-                ], style={"border": "1px solid rgba(59,130,246,0.13)", "padding": "10px", "borderRadius": "12px", "background": "#0c1428", "marginTop": "15px"})
             ]),
 
             # Explicabilidad with Scroll & Bar Charts
@@ -300,7 +296,6 @@ def toggle_modal_info(btn, close_x, backdrop):
 
 @callback(
     Output("modal-wrapper-metrics", "style"),
-    Output("chart-rl-metrics", "figure"),
     Output("chart-expl-lstm", "figure"),
     Output("chart-expl-sac", "figure"),
     Input("btn-open-metrics", "n_clicks"),
@@ -330,51 +325,6 @@ def toggle_modal_metrics(btn, close_x, backdrop, cripto):
         total_ret  = float(rl_metrics.get("total_return") or 16.0)
         bh_ret     = float(rl_metrics.get("bh_return")    or -24.0)
         sharpe     = float(rl_metrics.get("sharpe")        or 0.5)
-
-        n      = 180
-        x_data = list(range(n))
-        y_rl   = _build_equity_curve(total_ret, sharpe,       n)
-        y_bh   = _build_equity_curve(bh_ret,   sharpe * 0.25, n)
-
-        fig = go.Figure()
-        fig.add_trace(go.Scatter(
-            x=x_data, y=y_rl,
-            name=f"RL Agent ({total_ret:+.1f}%)",
-            line=dict(color="#10b981", width=2),
-            fill="tozeroy",
-            fillcolor="rgba(16,185,129,0.06)",
-        ))
-        fig.add_trace(go.Scatter(
-            x=x_data, y=y_bh,
-            name=f"Buy & Hold ({bh_ret:+.1f}%)",
-            line=dict(color="#3b82f6", width=2, dash="dash"),
-        ))
-        fig.add_hline(y=0, line_width=1, line_color="rgba(255,255,255,0.15)")
-        fig.update_layout(
-            paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
-            margin=dict(l=5, r=5, t=5, b=5),
-            showlegend=True,
-            legend=dict(orientation="h", y=1.12, bgcolor="rgba(0,0,0,0)", font=dict(size=10)),
-            font=dict(color="#94a3b8", size=10),
-            xaxis=dict(visible=False),
-            yaxis=dict(
-                showgrid=True, gridcolor="rgba(255,255,255,0.05)",
-                zeroline=False, ticksuffix="%"
-            ),
-            hovermode="x unified",
-        )
-
-        fig = go.Figure()
-        fig.add_trace(go.Scatter(x=x_data, y=y_rl, name="RL Agent",    line=dict(color="#10b981", width=2)))
-        fig.add_trace(go.Scatter(x=x_data, y=y_bh, name="Buy & Hold",  line=dict(color="#3b82f6", width=2, dash="dash")))
-        fig.update_layout(
-            paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
-            margin=dict(l=5, r=5, t=5, b=5), showlegend=True,
-            legend=dict(orientation="h", y=1.1, bgcolor="rgba(0,0,0,0)"),
-            font=dict(color="#94a3b8", size=10),
-            xaxis=dict(visible=False),
-            yaxis=dict(showgrid=True, gridcolor="rgba(255,255,255,0.05)", zeroline=False),
-        )
 
         # ── Chart LSTM SHAP ───────────────────────────────────────────
         lstm_names  = [f["feature"]    for f in top_lstm]
@@ -454,10 +404,10 @@ def toggle_modal_metrics(btn, close_x, backdrop, cripto):
             {"display": "flex", "position": "fixed", "top": "0", "left": "0",
             "width": "100%", "height": "100%", "zIndex": "1000",
             "alignItems": "center", "justifyContent": "center"},
-            fig, fig_lstm, fig_sac
+            fig_lstm, fig_sac
         )
 
-    return {"display": "none"}, dash.no_update, dash.no_update, dash.no_update
+    return {"display": "none"}, dash.no_update, dash.no_update
 
 def _build_equity_curve(total_return: float, sharpe: float, n: int = 180) -> np.ndarray:
     vol      = max(0.05, 0.12 / max(abs(sharpe), 0.1))
@@ -727,9 +677,7 @@ def update_predictions_page(cripto, currency):
         mape = float(mape)
     except (TypeError, ValueError):
         mape = 0.0
-    if 0 < abs(mape) < 1:
-        mape *= 100
-    mape_val = f"{mape:.4f}%"
+    mape_val = f"{mape:.2f}%"
     dir_acc_val = _fmt_window_diracc(metrics.get("window_diracc"))
 
     rl_metrics = get_trained_rl_metrics(cripto) or {}
