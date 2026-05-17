@@ -7,6 +7,7 @@
 # Tabla de contenidos
 
 * [Descripción general](#descripción-general)
+* [Capturas de pantalla](#capturas-de-pantalla)
 * [Arquitectura tecnológica](#arquitectura-tecnológica)
 * [Métricas del modelo](#métricas-del-modelo)
 * [Requisitos previos](#requisitos-previos)
@@ -40,6 +41,39 @@ Los datos se obtienen de la API de Binance e incorporan variables **OHLCV** junt
 La explicabilidad de las predicciones se implementa mediante **SHAP KernelExplainer**, y la validación temporal se realiza con la metodología **walk-forward**.
 
 La interfaz de usuario es una aplicación web local construida con **Dash Plotly**, que se comunica con un backend alojado en **Google Colab** y expuesto públicamente mediante **ngrok**.
+
+---
+
+# Capturas de pantalla
+
+## Autenticación
+
+### Inicio de sesión
+![Login](docs/images/login.png)
+
+### Registro
+![Register](docs/images/register.png)
+
+---
+
+## Panel principal
+
+### Dashboard
+![Dashboard](docs/images/dashboard.png)
+
+---
+
+## Panel lateral
+
+![Sidebar](docs/images/panel_lateral.png)
+
+
+---
+
+## Paper Trade
+
+### Simulación de operaciones
+![Paper Trade](docs/images/papertrade.png)
 
 ---
 
@@ -104,12 +138,12 @@ La interfaz de usuario es una aplicación web local construida con **Dash Plotly
 
 ## LSTM — Validación Walk-Forward y Backtesting
 
-| Activo |   WF DirAcc H1 |   WF DirAcc H4 | Test DirAcc H4 | Win Rate | Profit Factor | Trades |
-| ------ | -------------: | -------------: | -------------: | -------: | ------------: | -----: |
-| BTC    | 56.9 % ± 1.3 % | 62.0 % ± 1.5 % |         64.0 % |   72.2 % |          6.76 |    550 |
-| ETH    | 57.4 % ± 2.7 % | 62.9 % ± 2.6 % |         65.5 % |   74.6 % |          7.33 |    811 |
-| SOL    | 54.2 % ± 1.7 % | 60.0 % ± 3.3 % |         63.2 % |   66.0 % |          3.63 |    870 |
-| AVAX ⚠ | 51.8 % ± 5.0 % | 59.1 % ± 6.8 % |         56.9 % |   65.3 % |          3.61 |    524 |
+| Activo  |   WF DirAcc H1 |   WF DirAcc H4 | Test DirAcc H4 | Win Rate | Profit Factor | Trades |
+| ------- | -------------: | -------------: | -------------: | -------: | ------------: | -----: |
+| BTC     | 56.9 % ± 1.3 % | 62.0 % ± 1.5 % |         64.0 % |   72.2 % |          6.76 |    550 |
+| ETH     | 57.4 % ± 2.7 % | 62.9 % ± 2.6 % |         65.5 % |   74.6 % |          7.33 |    811 |
+| SOL     | 54.2 % ± 1.7 % | 60.0 % ± 3.3 % |         63.2 % |   66.0 % |          3.63 |    870 |
+| AVAX ⚠  | 51.8 % ± 5.0 % | 59.1 % ± 6.8 % |         56.9 % |   65.3 % |          3.61 |    524 |
 
 > ⚠ AVAX presenta mayor varianza en H1, lo que refleja la mayor volatilidad relativa de este activo.
 
@@ -264,7 +298,7 @@ La aplicación local utilizará automáticamente esa URL.
 Con Colab en ejecución, lanza la aplicación Dash:
 
 ```bash
-python app.py
+python dashboard/app.py
 ```
 
 Abre tu navegador y accede a:
@@ -305,6 +339,17 @@ Tras autenticarse, se accede al panel principal, que presenta el estado del port
 
 ---
 
+## Panel de navegación lateral
+
+El panel lateral permite navegar entre las secciones principales:
+
+* **Visión General** — dashboard con resumen del portafolio.
+* **Paper Trading** — simulación de operaciones sin riesgo real.
+* **Mercados** — acceso directo al análisis individual de BTC, ETH, SOL y AVAX.
+* **Perfil / Ajustes** — configuración de cuenta y preferencias.
+
+---
+
 ## Paper Trade
 
 El módulo de **Paper Trade** permite simular operaciones de compra o venta con capital ficticio, sin riesgo real.
@@ -313,7 +358,6 @@ El módulo de **Paper Trade** permite simular operaciones de compra o venta con 
 
 1. Accede a la sección **Paper Trade** desde el menú principal.
 2. Selecciona:
-
    * activo
    * tipo de operación (`compra` / `venta`)
    * importe simulado
@@ -325,17 +369,13 @@ Esto permite comparar el resultado con la predicción emitida por el modelo en e
 
 ## Vista individual por criptomoneda
 
-Cada activo dispone de su propio panel de análisis.
+Cada activo dispone de su propio panel de análisis. Al seleccionar BTC, ETH, SOL o AVAX se muestra:
 
-Al seleccionar BTC, ETH, SOL o AVAX se muestra:
-
-* **Gráfico de tendencia semanal** — evolución del precio real durante los últimos 7 días.
+* **Gráfico de tendencia semanal** — evolución del precio real durante los últimos 7 días con cono de predicción a 4 horas.
 * **Predicción de precios** — curva generada por el modelo LSTM para las próximas horas.
-* **Panel de decisión RL** — tabla con:
-
-  * precio estimado
-  * horizontes de predicción (`1 h`, `2 h`, `3 h`, `4 h`)
-  * acción recomendada (`COMPRAR`, `VENDER`, `MANTENER`)
+* **Panel de decisión RL** — acción recomendada (`COMPRAR`, `VENDER`, `MANTENER`) con nivel de confianza.
+* **Métricas del modelo** — RMSE, MAE, MAPE, Sharpe, Calmar y acuerdo de señales.
+* **Explicabilidad SHAP** — importancia de cada variable en la predicción y en la decisión del agente.
 
 ---
 
@@ -353,12 +393,7 @@ Desde la sección **Perfil / Ajustes** el usuario puede:
 
 Este proyecto no dispone actualmente de una licencia explícita.
 
-Se recomienda añadir una licencia antes de cualquier distribución pública. Para proyectos académicos con restricción de uso comercial, opciones habituales incluyen:
-
-* CC BY-NC 4.0
-* MIT
-
-Para uso estrictamente privado y académico, puede añadirse un archivo `LICENSE` con una declaración mínima como:
+Para uso estrictamente privado y académico:
 
 ```text
 Copyright (c) 2025 [Tu nombre].
@@ -376,33 +411,3 @@ Este software se distribuye exclusivamente con fines académicos.
 > Las predicciones y decisiones generadas por los modelos no constituyen asesoramiento financiero.
 >
 > Toda operación real con criptomonedas conlleva riesgo de pérdida de capital.
-
----
-
-# Pendiente de completar
-
-## Capturas de pantalla
-
-Puedes añadir imágenes en las siguientes secciones:
-
-```md
-## Login
-![Login](docs/images/login.png)
-
-## Dashboard
-![Dashboard](docs/images/dashboard.png)
-
-## Vista de criptomoneda
-![Crypto View](docs/images/crypto-view.png)
-
-## Paper Trade
-![Paper Trade](docs/images/paper-trade.png)
-```
-
----
-
-## Variables por confirmar
-
-* URL definitiva del repositorio GitHub
-* Nombre real del notebook de Colab
-* Capturas finales de la interfaz
