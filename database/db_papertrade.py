@@ -124,7 +124,7 @@ def ejecutar_compra(
         )
         conn.commit()
 
-    return True, f"✅ Compra ejecutada: {cantidad:.6f} {crypto_symbol} a ${precio_actual:,.2f}"
+    return True, f"✅ Compra ejecutada: {cantidad:.2f} {crypto_symbol} a ${precio_actual:,.2f}"
 
 
 def ejecutar_venta(

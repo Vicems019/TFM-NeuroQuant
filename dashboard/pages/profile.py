@@ -60,11 +60,11 @@ layout = html.Div([
                                 html.Span("usuario@tfm.es", className="info-val"),
                             ], className="info-row"),
                             html.Div([
-                                html.Span("Plan", className="info-label"),
+                                html.Span("Plan: ", className="info-label"),
                                 html.Span("NeuroQuant Pro", className="info-val", style={"color": "#10b981"}),
                             ], className="info-row"),
                             html.Div([
-                                html.Span("Activo desde", className="info-label"),
+                                html.Span("Activo desde: ", className="info-label"),
                                 html.Span(id="profile-activo-desde", className="info-val"),
                             ], className="info-row"),
                         ], className="info-table"),
